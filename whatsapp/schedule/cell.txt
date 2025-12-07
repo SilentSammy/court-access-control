@@ -1,0 +1,6 @@
+<div class="column layer">
+<div class="column">
+<div class="cell" style="flex-grow: $start"></div>
+<div class="$class event cell" style="flex-grow: $span"><p>$content</p></div>
+</div>
+</div>

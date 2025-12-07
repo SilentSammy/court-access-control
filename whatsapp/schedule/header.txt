@@ -1,0 +1,1 @@
+<div class="column"> <div class="header cell $class"><p>$day</p></div> </div>
