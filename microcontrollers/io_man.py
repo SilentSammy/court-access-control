@@ -176,6 +176,84 @@ class IOManager:
         self._interrupted = True
         self.input_buffer.clear()  # Clear any buffered input
     
+    async def prompt_menu(self, title, options, timeout=None):
+        """
+        Display a menu and allow user to cycle through options with arrow-like navigation.
+        
+        Args:
+            title: Menu title to display on first line
+            options: List of option strings
+            timeout: Optional timeout in seconds (None for infinite wait)
+            
+        Returns:
+            Tuple of (index, selected_option_string)
+            
+        Example:
+            index, choice = await io.prompt_menu("Settings", [
+                "WiFi Setup",
+                "Display Brightness", 
+                "Sound Volume",
+                "Factory Reset"
+            ])
+        
+        Navigation:
+            - 1: Move left/previous
+            - 2: Select current option
+            - 3: Move right/next
+            - Number keys (4-9): Jump directly to option (if within range)
+            - A: Move left/previous (alternative)
+            - B: Select (alternative)
+            - C: Move right/next (alternative)
+            - D: Cancel (raises KeyboardInterrupt)
+        
+        Display format:
+            {current_option_text}
+            <1   2^  3>
+        """
+        if not options:
+            raise ValueError("Options list cannot be empty")
+        
+        current_index = 0
+        
+        def format_display():
+            # Line 1: Current option text
+            # Line 2: Navigation hints (static)
+            return f"{options[current_index]}\n<1   2^  3>"
+        
+        # Display initial state
+        self.output_func(format_display())
+        
+        while True:
+            char = await self.read_char(timeout=timeout)
+            
+            if char is None:
+                # Timeout
+                return (current_index, options[current_index])
+            
+            # Navigation keys
+            if char == '1' or char == 'A':  # Left/Previous
+                current_index = (current_index - 1) % len(options)
+                self.output_func(format_display())
+            
+            elif char == '2' or char == 'B':  # Select
+                return (current_index, options[current_index])
+            
+            elif char == '3' or char == 'C':  # Right/Next
+                current_index = (current_index + 1) % len(options)
+                self.output_func(format_display())
+            
+            elif char == 'D':  # Cancel
+                raise KeyboardInterrupt("Menu cancelled")
+            
+            # Handle numeric direct selection (4-9 for options 1-6)
+            elif char.isdigit():
+                num = int(char)
+                if 4 <= num <= 9:
+                    option_index = num - 4  # 4 maps to index 0, 5 to 1, etc.
+                    if option_index < len(options):
+                        current_index = option_index
+                        self.output_func(format_display())
+    
     def display(self, text):
         """Synchronously display text (convenience wrapper)."""
         self.output_func(text)
