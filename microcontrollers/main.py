@@ -63,57 +63,49 @@ async def idle_mode():
 
 async def password_mode():
     """Password entry mode"""
-    password = await io.read_input("Password: {0}", max_length=4)
-    
-    # Check if mode changed during input (watchdog triggered)
-    if active_mode != "password":
-        return
-    
-    if password == "1234":
-        io.display("Access Granted!\nWelcome!")
-        await io.read_char(timeout=1.5)  # Brief welcome message
-        # Transition to menu mode if not interrupted
-        if active_mode == "password":
+    while True:
+        password = await io.read_input("Password: {0}", max_length=4)
+        
+        if password == "1234":
+            io.display("Access Granted!\nWelcome!")
+            await io.read_char(timeout=1.5)  # Brief welcome message
             set_mode("menu")
-    else:
-        io.display("Access Denied!\nTry again...")
-        await io.read_char(timeout=2.0)  # Wait 2s or until interrupt
-        if active_mode == "password":
-            set_mode("idle")
+            return
+        else:
+            io.display("Access Denied!\nTry again...")
+            await io.read_char(timeout=2.0)  # Wait 2s before next attempt
 
 async def menu_mode():
     """Main control menu - accessible after authentication"""
-    index, choice = await io.prompt_menu("Main Menu", [
-        "Toggle Door",
-        "Toggle Light",
-        "Quick Unlock"
-    ], timeout=10)
-    
-    # Check if mode changed during menu (watchdog triggered)
-    if active_mode != "menu":
-        return
-    
-    # Execute selected action
-    if index == 0:  # Toggle Door
-        set_lock()
-        state = "Locked" if get_lock_state() else "Unlocked"
-        io.display(f"Door {state}!")
-    
-    elif index == 1:  # Toggle Light
-        set_light()
-        state = "On" if get_light_state() else "Off"
-        io.display(f"Light {state}!")
-    
-    elif index == 2:  # Quick Unlock
-        duration = quick_unlock(3)
-        io.display(f"Unlocked for\n{duration} seconds")
-    
-    # Show result briefly, then return to idle
-    await io.read_char(timeout=2.0)
-    
-    # Always return to idle after menu action
-    if active_mode == "menu":
-        set_mode("idle")
+    while True:
+        index, choice = await io.prompt_menu("Main Menu", [
+            "Toggle Door",
+            "Toggle Light",
+            "Quick Unlock",
+            "Exit"
+        ], timeout=10)
+        
+        # Execute selected action
+        if index == 0:  # Toggle Door
+            set_lock()
+            state = "Locked" if get_lock_state() else "Unlocked"
+            io.display(f"Door {state}!")
+        
+        elif index == 1:  # Toggle Light
+            set_light()
+            state = "On" if get_light_state() else "Off"
+            io.display(f"Light {state}!")
+        
+        elif index == 2:  # Quick Unlock
+            duration = quick_unlock(3)
+            io.display(f"Unlocked for\n{duration} seconds")
+        
+        elif index == 3:  # Exit
+            set_mode("idle")
+            return
+        
+        # Show result briefly, then loop back to menu
+        await io.read_char(timeout=2.0)
 
 async def main():
     """Main event loop - runs current mode continuously"""
