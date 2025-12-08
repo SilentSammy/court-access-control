@@ -31,6 +31,11 @@ def check_idle_timeout(timer):
     if active_mode != "idle" and time.time() - last_activity_time > idle_timeout:
         set_mode("idle")
 
+def check_unlock_button_timer(timer):
+    """Timer callback to monitor physical unlock button"""
+    if check_unlock_button():
+        quick_unlock(3)
+
 lcd = LCD(E=16, RS=17, D7=18, D6=19, D5=20, D4=21)
 display = Display(lcd.update_display)
 pad = MatrixPad([2, 3, 4, 5], [6, 7, 8, 9])
@@ -42,6 +47,10 @@ io.on_char_received = on_char_received
 # Set up watchdog timer to check for idle timeout
 idle_watchdog = Timer()
 idle_watchdog.init(period=1000, mode=Timer.PERIODIC, callback=check_idle_timeout)
+
+# Set up timer to monitor unlock button
+unlock_button_monitor = Timer()
+unlock_button_monitor.init(period=100, mode=Timer.PERIODIC, callback=check_unlock_button_timer)
 
 async def idle_mode():
     """Idle mode - display clock and wait for keypress"""
