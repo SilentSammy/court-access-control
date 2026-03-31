@@ -7,8 +7,25 @@ class Timestamp(int):
     SYSTEM_TIMEZONE = 0
     DISPLAY_TIMEZONE = 0
     MIN = 60
-    HOUR = 60 * MIN
-    DAY = 24 * HOUR
+    HOUR = 60 * 60
+    DAY = 24 * 60 * 60
+    TEST_MODE = False
+    
+    @classmethod
+    def enable_test_mode(cls):
+        """Enable test mode: 1 'minute' = 1 second (for fast testing)."""
+        cls.TEST_MODE = True
+        cls.MIN = 1
+        cls.HOUR = 60
+        cls.DAY = 24 * 60
+    
+    @classmethod
+    def disable_test_mode(cls):
+        """Disable test mode: restore normal time units."""
+        cls.TEST_MODE = False
+        cls.MIN = 60
+        cls.HOUR = 60 * 60
+        cls.DAY = 24 * 60 * 60
 
     def format(self, fmt="%Y-%m-%d %H:%M:%S"):
         time = self + Timestamp.HOUR * Timestamp.DISPLAY_TIMEZONE
@@ -56,7 +73,7 @@ class Timestamp(int):
 
     @property
     def minutes(self):
-        return self // 60
+        return self // Timestamp.MIN
 
 class Encoder:
     """Converts an int to a padded base-n string and vice-versa, using a custom alphabet."""
@@ -194,7 +211,8 @@ class IntPacker:
             values.append(value)
         return tuple(values)
 
-class Session:
+class Session(int):
+    """Represents a court booking session. Subclasses int where the integer value is the full_code."""
     BASE = 10
 
     START_DIGITS = 4
@@ -216,17 +234,42 @@ class Session:
     ENCODER = Encoder(BASE, TOTAL_CEIL)
     PACKER = IntPacker(START_CEIL, SPAN_CEIL, ROOM_CEIL)
 
-    def __init__(self, start: Timestamp, span: int, room: int = 0):
-        self.start = Timestamp(start)
-        self.span = span
-        self.room = room
+    def __new__(cls, start: Timestamp, span: int, room: int = 0):
+        """Create a new Session from start time, duration, and room number."""
+        # Ensure start is a Timestamp
+        start = Timestamp(start)
+        # Normalize span and room within their limits
+        span = ((span - cls.MIN_SPAN) % cls.SPAN_CEIL) + cls.MIN_SPAN
+        room = room % cls.ROOM_CEIL
+        # Create the full_code
+        full_code = cls.PACKER.pack(start.minutes, span, room, wrap_first=False)
+        # Create and return the int instance
+        return int.__new__(cls, full_code)
 
     def __str__(self):
         return f"Start: {self.start.format('%Y-%m-%d %H:%M')}, Minutes: {self.span}, Room: {self.room}"
 
     def __repr__(self):
-        # return f"s:{self.start.minutes} d:{self.span} r:{self.room}"
         return f"Session(Timestamp({self.start.minutes}*Timestamp.MIN), {self.span}, {self.room})"
+
+    @property
+    def start(self):
+        """The start time of the session as a Timestamp."""
+        start_mins, _, _ = Session.PACKER.unpack(int(self))
+        return Timestamp(start_mins * Timestamp.MIN)
+
+    @property
+    def span(self):
+        """The duration of the session in minutes."""
+        _, span, _ = Session.PACKER.unpack(int(self))
+        # Apply the same normalization as __new__
+        return ((span - Session.MIN_SPAN) % Session.SPAN_CEIL) + Session.MIN_SPAN
+
+    @property
+    def room(self):
+        """The room number for the session."""
+        _, _, room = Session.PACKER.unpack(int(self))
+        return room
 
     @property
     def span_hrs(self):
@@ -234,7 +277,7 @@ class Session:
 
     @property
     def end(self):
-        return self.start + self.span*Timestamp.MIN
+        return Timestamp(self.start + self.span*Timestamp.MIN)
 
     @property
     def code(self):
@@ -244,7 +287,7 @@ class Session:
     @property
     def full_code(self):
         """This integer is a lossless encoding of the session's start time, but lossy span and room."""
-        return Session.PACKER.pack(self.start.minutes, self.span, self.room, wrap_first=False)
+        return int(self)
 
     @property
     def passcode(self):
@@ -287,19 +330,16 @@ class Session:
     @staticmethod
     def from_code(code):
         """Returns a new Session object from a code. Both types of codes are supported."""
-        # unpack code
+        # if it's already a full code, use it directly
+        if code >= Session.TOTAL_CEIL:
+            return int.__new__(Session, code)
+        
+        # otherwise, it's a partial code - unpack and complete the timestamp
         start, span, room = Session.PACKER.unpack(code)
-
-        # ensure that span values below the minimum become values above the ceil
         span = ((span - Session.MIN_SPAN) % Session.SPAN_CEIL) + Session.MIN_SPAN
-
-        # if the code is a partial code, complete the timestamp
-        if code < Session.TOTAL_CEIL:
-            start = Session.complete_timestamp(start, span)
-        else:
-            start = Timestamp(start*Timestamp.MIN)
-
-        # create session
+        start = Session.complete_timestamp(start, span)
+        
+        # create session (will be re-encoded as full_code)
         return Session(start, span, room)
     
     @staticmethod

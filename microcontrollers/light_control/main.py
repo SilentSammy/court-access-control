@@ -36,8 +36,16 @@ def handle_lights(room_num):
         }
     return handler
 
+def device_info_handler(request):
+    """Return device information for discovery"""
+    return {
+        "device_type": "light_controller",
+        "endpoints": ["1/lights", "2/lights", "3/lights"]
+    }
+
 # Build endpoints for all 3 rooms
 endpoints = {
+    "device-info": device_info_handler,
     "1/lights": handle_lights(1),
     "2/lights": handle_lights(2),
     "3/lights": handle_lights(3)
@@ -49,6 +57,7 @@ connect_wifi(wait=True)
 if wlan.isconnected():
     ip = wlan.ifconfig()[0]
     print("\nRoom light controller ready. Endpoints:")
+    print("  http://" + ip + "/device-info       (get device info for discovery)")
     print("  http://" + ip + "/1/lights?state=1  (turn on room 1)")
     print("  http://" + ip + "/1/lights?state=0  (turn off room 1)")
     print("  http://" + ip + "/1/lights          (toggle room 1)")

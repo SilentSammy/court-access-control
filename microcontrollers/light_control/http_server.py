@@ -86,12 +86,15 @@ def start_webserver(endpoints):
             if endpoint in endpoints:
                 result = endpoints[endpoint](request)
                 body = ""
+                content_type = "text/plain"
                 if isinstance(result, dict):
                     body = ujson.dumps(result)
+                    content_type = "application/json"
                 elif result is not None:
                     body = str(result)
                 response = ("HTTP/1.1 200 OK\r\n"
                             "Access-Control-Allow-Origin: *\r\n"
+                            "Content-Type: " + content_type + "\r\n"
                             "Connection: keep-alive\r\n"
                             "Content-Length: " + str(len(body)) + "\r\n\r\n" +
                             body)
