@@ -70,6 +70,10 @@ class SessionManager:
                 f.write(f"{session.full_code}\n")
         self.active_sessions.clear()
     
+    def get_all_sessions(self):
+        """Get all sessions from the file."""
+        return self._read_sessions()
+    
     def _check_sessions(self):
         """Check all sessions (read from file) and trigger callbacks as needed."""
         sessions = self._read_sessions()

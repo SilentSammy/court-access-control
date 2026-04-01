@@ -14,20 +14,30 @@ for light in room_lights.values():
     light.off()
 
 def handle_lights(room_num):
-    """Create a handler for a specific room's lights"""
+    """Handle light operations for a specific room via query params.
+    
+    Query params:
+        - No params: Get status (read-only)
+        - state=1: Turn ON
+        - state=0: Turn OFF
+        - toggle=1: Toggle
+    """
     def handler(request):
         light = room_lights[room_num]
-        state_param = request['params'].get('state')
+        params = request.get('params', {})
         
-        if state_param is None:
-            # No state provided - toggle
+        # Check for toggle request
+        if params.get('toggle'):
             light.value(not light.value())
             action = "toggled"
-        else:
-            # Set to specific state
-            state = int(state_param)
+        # Check for state change request
+        elif 'state' in params:
+            state = int(params['state'])
             light.value(state)
             action = "on" if state else "off"
+        # Default: just get status (no side effects)
+        else:
+            action = "status"
         
         return {
             "room": room_num,
@@ -57,10 +67,11 @@ connect_wifi(wait=True)
 if wlan.isconnected():
     ip = wlan.ifconfig()[0]
     print("\nRoom light controller ready. Endpoints:")
-    print("  http://" + ip + "/device-info       (get device info for discovery)")
-    print("  http://" + ip + "/1/lights?state=1  (turn on room 1)")
-    print("  http://" + ip + "/1/lights?state=0  (turn off room 1)")
-    print("  http://" + ip + "/1/lights          (toggle room 1)")
+    print("  http://" + ip + "/device-info        (get device info for discovery)")
+    print("  http://" + ip + "/1/lights           (get status room 1)")
+    print("  http://" + ip + "/1/lights?state=1   (turn on room 1)")
+    print("  http://" + ip + "/1/lights?state=0   (turn off room 1)")
+    print("  http://" + ip + "/1/lights?toggle=1  (toggle room 1)")
     print("  (Same for /2/lights and /3/lights)")
     print("\nPress Ctrl+C to stop server\n")
     start_webserver(endpoints)

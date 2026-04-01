@@ -1,1 +1,1 @@
-{"devices": {"192.168.1.10": {"ip": "192.168.1.10", "device_type": "light_controller", "endpoints": ["1/lights", "2/lights", "3/lights"], "last_seen": "2026-03-30T19:24:48.558847"}}}
+{"devices": {}}
