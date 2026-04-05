@@ -81,9 +81,9 @@ class WAppAgent:
         return {"Authorization": f"Bearer {self.token}"}
     
     def start_listening(self):
-        # Start the Flask app in a separate thread
+        # Start the Flask app in a separate thread on port 3000
         from threading import Thread
-        flask_thread = Thread(target=self.webserver.run)
+        flask_thread = Thread(target=lambda: self.webserver.run(host='127.0.0.1', port=3000, use_reloader=False))
         flask_thread.start()
 
     def _handle_request(self):

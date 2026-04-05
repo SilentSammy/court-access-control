@@ -120,7 +120,9 @@ class DeviceDiscoverer:
         """Check if device has device-info endpoint and return its data."""
         try:
             url = f"http://{ip}/device-info"
-            async with aiohttp.ClientSession() as session:
+            # Use connector with force_close to avoid Windows connection errors
+            connector = aiohttp.TCPConnector(force_close=True, limit=10)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=2)) as response:
                     if response.status == 200:
                         text = await response.text()
@@ -234,7 +236,7 @@ async def _demo():
     
     discoverer = DeviceDiscoverer(
         discovery_interval=30, 
-        health_check_interval=5,
+        health_check_interval=10,
         scan_networks=[
             "192.168.137.0/24",  # Windows hotspot
             "192.168.1.0/24"     # Home network (check ipconfig at home)

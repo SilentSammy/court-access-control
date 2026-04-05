@@ -2,16 +2,16 @@ from http_server import *
 
 from machine import Pin
     
-# Set up room lights on pins 14, 13, 12
+# Set up room lights on pins 14, 13, 12 (ACTIVE LOW)
 room_lights = {
     1: Pin(14, Pin.OUT),
     2: Pin(12, Pin.OUT),
     3: Pin(13, Pin.OUT)
 }
 
-# Initialize all lights to off
+# Initialize all lights to off (HIGH for active low)
 for light in room_lights.values():
-    light.off()
+    light.on()  # Active low: HIGH = OFF
 
 def handle_lights(room_num):
     """Handle light operations for a specific room via query params.
@@ -21,6 +21,8 @@ def handle_lights(room_num):
         - state=1: Turn ON
         - state=0: Turn OFF
         - toggle=1: Toggle
+    
+    Note: Lights are ACTIVE LOW (pin LOW = light ON)
     """
     def handler(request):
         light = room_lights[room_num]
@@ -33,7 +35,7 @@ def handle_lights(room_num):
         # Check for state change request
         elif 'state' in params:
             state = int(params['state'])
-            light.value(state)
+            light.value(not state)  # Invert for active low
             action = "on" if state else "off"
         # Default: just get status (no side effects)
         else:
@@ -41,7 +43,7 @@ def handle_lights(room_num):
         
         return {
             "room": room_num,
-            "light": "on" if light.value() else "off",
+            "light": "on" if not light.value() else "off",  # Invert for active low
             "action": action
         }
     return handler

@@ -3,7 +3,7 @@ from machine import Pin, Timer
 from display import HT16K33Display, I2C
 
 # === CONFIGURATION ===
-ROOM = 1  # Change this for different rooms
+ROOM = 2  # Change this for different rooms
 
 # === HARDWARE SETUP ===
 # Initialize I2C and display (Raspberry Pi Pico W: GP21=SCL, GP20=SDA)
@@ -123,14 +123,18 @@ def quick_unlock(duration=5000):
     """
     global relock_timer
     
+    # Only set relock timer if door was locked
+    was_locked = relay.value() == 1
+    
     # Unlock the door
     relay.value(0)
     set_display("OPEN", priority=1, duration=2000)
     print("QUICK UNLOCK")
     
-    # Cancel any existing relock timer and start a new one
-    relock_timer.deinit()
-    relock_timer.init(period=duration, mode=Timer.ONE_SHOT, callback=relock)
+    # Cancel any existing relock timer and start a new one (only if was locked)
+    if was_locked:
+        relock_timer.deinit()
+        relock_timer.init(period=duration, mode=Timer.ONE_SHOT, callback=relock)
 
 def relock(timer):
     """Re-lock the door after temporary unlock."""
@@ -236,6 +240,19 @@ if wlan.isconnected():
     print("  http://" + ip + f"/{ROOM}/countdown      (get countdown status)")
     print("  http://" + ip + f"/{ROOM}/countdown?s=60 (set 60s countdown)")
     print("\nPress Ctrl+C to stop server\n")
-    start_webserver(endpoints)
+    
+    try:
+        start_webserver(endpoints)
+    except KeyboardInterrupt:
+        print("\n\nShutting down...")
+        # Stop all timers
+        display_timer.deinit()
+        countdown_timer.deinit()
+        button_timer.deinit()
+        relock_timer.deinit()
+        # Clean up display clear timers
+        for timer in display_clear_timers.values():
+            timer.deinit()
+        print("All timers stopped.")
 else:
     print("WiFi not connected. Server not started.")

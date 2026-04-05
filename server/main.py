@@ -10,8 +10,8 @@ from session import Session, Timestamp
 
 # SETUP
 facility = FacilityManager(discoverer=DeviceDiscoverer(
-    discovery_interval=300,
-    health_check_interval=5,
+    discovery_interval=30,
+    health_check_interval=10,
     scan_networks=[
         "192.168.137.0/24",  # Windows hotspot
         "192.168.1.0/24"     # Home network (UPDATE: check ipconfig at home for your actual network)

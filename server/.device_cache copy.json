@@ -1,0 +1,1 @@
+{"devices": {"192.168.1.169": {"ip": "192.168.1.169", "device_type": "light_controller", "endpoints": ["1/lights", "2/lights", "3/lights"], "last_seen": "2026-03-31T21:30:04.752531"}, "192.168.1.170": {"ip": "192.168.1.170", "device_type": "access_controller", "endpoints": ["2/lock", "2/countdown"], "last_seen": "2026-03-31T21:30:04.774138"}}}

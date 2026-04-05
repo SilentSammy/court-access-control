@@ -22,7 +22,9 @@ import json
 async def _http_request(url):
     """Send HTTP GET request, return dict if JSON else string."""
     try:
-        async with aiohttp.ClientSession() as session:
+        # Use connector with force_close to avoid Windows connection errors
+        connector = aiohttp.TCPConnector(force_close=True)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as response:
                 data = await response.text()
                 try:
