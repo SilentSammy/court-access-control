@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+    <div class="main-container">
+        <!-- This flexbox contains a header row, and a 'content' row that fills the rest of the height -->
+        <div class="rows">     
+            <div class="header row">
+                <!-- Every header takes up an equal width except the hour. It's important that the content columns have this same width. -->
+                <div class="hour column"> <div class="header cell gray-bg"><p>Hour</p></div> </div>
+    $headers
+            </div>
+            
+            <!-- This content row contains two layers. A background layer for
+                the alternating color rows, and a foreground content layer -->
+            <div class="row layers">
+                <div class="alternating layer">
+                    <div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+                </div>
+
+                <div class="row layer">
+                    <div class="hour column">
+                        <div class="hour cell">00:00</div>
+                        <div class="hour cell">01:00</div>
+                        <div class="hour cell">02:00</div>
+                        <div class="hour cell">03:00</div>
+                        <div class="hour cell">04:00</div>
+                        <div class="hour cell">05:00</div>
+                        <div class="hour cell">06:00</div>
+                        <div class="hour cell">07:00</div>
+                        <div class="hour cell">08:00</div>
+                        <div class="hour cell">09:00</div>
+                        <div class="hour cell">10:00</div>
+                        <div class="hour cell">11:00</div>
+                        <div class="hour cell">12:00</div>
+                        <div class="hour cell">13:00</div>
+                        <div class="hour cell">14:00</div>
+                        <div class="hour cell">15:00</div>
+                        <div class="hour cell">16:00</div>
+                        <div class="hour cell">17:00</div>
+                        <div class="hour cell">18:00</div>
+                        <div class="hour cell">19:00</div>
+                        <div class="hour cell">20:00</div>
+                        <div class="hour cell">21:00</div>
+                        <div class="hour cell">22:00</div>
+                        <div class="hour cell">23:00</div>
+                    </div>
+    $columns
+                </div>
+
+                <div class="legend">
+                    <h2 class="gray-bg">Legend</h2>
+                    <div class="legend-item"> <div class="legend-color gray-bg"></div><span>Other sessions</span> </div>
+                    <div class="legend-item"> <div class="legend-color cyan-bg"></div><span>Your sessions</span> </div>
+                    <div class="legend-item"> <div class="legend-color yellow-bg"></div><span>Sessions to add</span> </div>
+                    <div class="legend-item"> <div class="legend-color red-bg"></div><span>Sessions to cancel</span> </div>
+                    <div class="legend-item"> <div class="legend-timeline"></div><span>Current time</span> </div>
+                </div>
+            </div>
+        </div>
+
+        <h1 class="title">$title</h1>
+    </div>
+</body>
+</html>

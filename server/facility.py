@@ -39,15 +39,19 @@ async def _http_request(url):
 class FacilityManager:
     """Manages IoT devices using DeviceDiscoverer."""
     
-    def __init__(self, mock=False, discoverer=None):
+    def __init__(self, mock=False, discoverer=None, mock_rooms=None):
         """Initialize with device discoverer.
         
         Args:
             mock: If True, returns mock responses without actual device communication
             discoverer: DeviceDiscoverer instance. If None, creates default with sensible settings.
+            mock_rooms: List of room ID strings (e.g. ["1", "2"]) that always appear as
+                        available, even when no physical devices are discovered. Hardware
+                        calls for these rooms return simulated responses.
         """
         self.mock = mock
         self.discoverer = discoverer or DeviceDiscoverer()
+        self.mock_rooms = [str(r) for r in (mock_rooms or [])]
     
     def start_discovery(self):
         """Start background device discovery."""
@@ -56,12 +60,27 @@ class FacilityManager:
     def stop_discovery(self):
         """Stop background device discovery."""
         self.discoverer.stop_continuous_discovery()
+
+    def get_room_ids(self):
+        """Return sorted list of room ID strings from discovered devices plus mock_rooms."""
+        endpoints = self.discoverer.get_all_endpoints()
+        discovered = set()
+        for e in endpoints:
+            if e.endswith('/lights') or e.endswith('/lock'):
+                discovered.add(e.split('/')[0])
+        return sorted(discovered | set(self.mock_rooms))
+
+    def _is_mock_room(self, room_id):
+        """True if room_id is a mock-only room (not physically discovered)."""
+        return str(room_id) in self.mock_rooms and not self.discoverer.endpoint_exists(f"{room_id}/lights")
     
     async def control_lights(self, room_id, state):
         """Control room lights by ID."""
         endpoint = f"{room_id}/lights"
         
         if not self.discoverer.endpoint_exists(endpoint):
+            if self._is_mock_room(room_id):
+                return {"room": int(room_id), "light": "on" if state else "off", "action": "on" if state else "off", "mock": True}
             return {"error": f"Room {room_id} not found"}
         
         if self.mock:
@@ -85,6 +104,8 @@ class FacilityManager:
         endpoint = f"{room_id}/lock"
         
         if not self.discoverer.endpoint_exists(endpoint):
+            if self._is_mock_room(room_id):
+                return {"room": int(room_id), "lock": "locked" if state else "unlocked", "action": "locked" if state else "unlocked", "mock": True}
             return {"error": f"Room {room_id} lock not found"}
         
         if self.mock:
@@ -108,6 +129,8 @@ class FacilityManager:
         endpoint = f"{room_id}/countdown"
         
         if not self.discoverer.endpoint_exists(endpoint):
+            if self._is_mock_room(room_id):
+                return {"room": int(room_id), "countdown_remaining": seconds, "action": "set", "mock": True}
             return {"error": f"Room {room_id} countdown not found"}
         
         if self.mock:
@@ -130,6 +153,8 @@ class FacilityManager:
         endpoint = f"{room_id}/countdown"
         
         if not self.discoverer.endpoint_exists(endpoint):
+            if self._is_mock_room(room_id):
+                return {"room": int(room_id), "countdown_remaining": 0, "action": "status", "mock": True}
             return {"error": f"Room {room_id} countdown not found"}
         
         if self.mock:
@@ -148,6 +173,7 @@ class FacilityManager:
         Returns status for lights, locks, and countdown if available.
         """
         status = {"room": int(room_id)}
+        is_mock = self._is_mock_room(room_id)
         
         # Check for lights
         lights_endpoint = f"{room_id}/lights"
@@ -159,6 +185,8 @@ class FacilityManager:
                 result = await _http_request(url)
                 if "light" in result:
                     status["light"] = result["light"]
+        elif is_mock:
+            status["light"] = "unknown"
         
         # Check for locks
         lock_endpoint = f"{room_id}/lock"
@@ -170,6 +198,8 @@ class FacilityManager:
                 result = await _http_request(url)
                 if "lock" in result:
                     status["lock"] = result["lock"]
+        elif is_mock:
+            status["lock"] = "unknown"
         
         # Check for countdown
         countdown_endpoint = f"{room_id}/countdown"

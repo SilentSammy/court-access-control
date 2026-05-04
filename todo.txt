@@ -1,0 +1,4 @@
+* establish connection with on-premise server: https://ff1f-2806-230-6047-3f71-d5e4-4cfc-f46c-1584.ngrok-free.app/
++ setup local server for testing
++ Remove password display, just open rooms automatically.
+- deploy to on-premise server
