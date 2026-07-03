@@ -1,0 +1,33 @@
+MCP_TEST
++ get ai_convo.py working again.
++ also, perhaps we should include ConversationContext such as user id and current datetime (phone number) in the system prompt. We may want to implement a dynamic system prompt and handle conversation history in bot.py. This way for every request, the system prompt is updated while the rest of the history is unchanged. We may also want to add a limit to the conversation history.
++ Improve send_photo security and allow for more than one send_photo_* tool by providing custom descriptions.
++ set up user-specific tools (user may update own data but not others')
++ see if we can find a clean pattern for the aformentioned user-specific tools.
++ ensure api endpoints don't require all parameters
++ helper in bot.py for make_tool_filter
++ move wrap function to client.py
++ Why isn't ConversationContext being implemented in wapp_bot.py?
++ Refactor BotConfig to abstract and simplify run_conversation logic
++ is passing http_client to wrap_tool necessary?
++ Initialize Agent in BotConfig instead
++ Reorganize into packages
+
+BOT STUFF
++ Simplify Bot by using dynamic instructions and deque for history.
++ Make separate menu and ai boilerplates.
+- Make simple shopping list or similar use case for the boilerplates.
+- Make hybrid boilerplate
+- 
+
+COURT_ACCESS
++ get mock IoT endpoints working
++ remove DeviceDiscoverer mock functionality, will use mock endpoints instead
++ get DeviceDiscoverer and FacilityManager working
+-- find better pattern for turning DeviceDiscoverer and FacilityManager into an API.
+- set up facility_server.py v1: will import DeviceDiscoverer and FacilityManager and set up admin-level tools to manage facility directly
+- get SessionManager working
+- set up facility_server.py v2: will additionally import SessionManager and add user-level tools to manage schedules and automate facility actions
+
+LOW PRIORITY
+- Convert markdown to whatsapp formatiing. Maybe add auto picture sends?
