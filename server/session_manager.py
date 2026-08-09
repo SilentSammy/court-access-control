@@ -16,6 +16,12 @@ class SessionManager:
     - Auto-cleanup of ended sessions
     - Thread-safe operation
     - Configurable callbacks for hardware control
+    - Continuous start callbacks (idempotent) ensure rooms stay open
+    - Single end callback when session completes
+    
+    Note: start_session callback is called repeatedly for active sessions to ensure
+    rooms are opened even if booked for "right now" or if initial attempt fails.
+    Hardware control should be idempotent (turning lights ON when already ON is harmless).
     """
     
     def __init__(self, check_interval=5, sessions_file="sessions.txt"):
@@ -93,18 +99,22 @@ class SessionManager:
         ended_sessions = []  # Track sessions to remove from file
         
         for session in sessions:
-            # Check if session has ended - if so, end it and mark for removal
+            # Check if session has ended - if so, end it ONCE and mark for removal
             if session.has_ended():
-                if self.end_session:
-                    self.end_session(session)
+                # Only call end callback if it was previously active
+                if session in self.active_sessions:
+                    if self.end_session:
+                        self.end_session(session)
+                    self.active_sessions.remove(session)
                 ended_sessions.append(session)
-                # Also remove from active tracking
-                self.active_sessions.discard(session)
                 continue  # Skip to next session
             
-            # Check if session should start
-            if session.has_started() and session not in self.active_sessions:
+            # Check if session has started - continuously call start callback
+            # This ensures rooms are opened even if booked for "right now"
+            if session.has_started():
+                # Track it as active
                 self.active_sessions.add(session)
+                # Call start callback every time to ensure room is open (idempotent)
                 if self.start_session:
                     self.start_session(session)
         
@@ -150,12 +160,17 @@ if __name__ == "__main__":
         Session(now_ts + 5, span=3, room=2),  # Starts in 5 sec, lasts 3 sec
     ]
     
+    # Track call counts to show continuous start callbacks
+    start_counts = {}
+    
     # Set up callbacks
     def on_start(session):
-        print(f"✓ Session STARTED: Room {session.room} at {datetime.now().strftime('%H:%M:%S')}")
+        start_counts[session.room] = start_counts.get(session.room, 0) + 1
+        count = start_counts[session.room]
+        print(f"✓ Session OPEN (#{count}): Room {session.room} at {datetime.now().strftime('%H:%M:%S')}")
     
     def on_end(session):
-        print(f"✗ Session ENDED: Room {session.room} at {datetime.now().strftime('%H:%M:%S')}")
+        print(f"✗ Session CLOSED: Room {session.room} at {datetime.now().strftime('%H:%M:%S')}")
     
     # Create and configure manager with persistent sessions
     demo_file = "demo_sessions.txt"

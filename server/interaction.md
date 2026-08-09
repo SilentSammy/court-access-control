@@ -21,7 +21,7 @@ If you identify one or multiple sessions that should be removed, you should desc
 
 CONTEXT:
 Available room types: "Squash Courts"
-Now: Sunday 2026/08/09 10:36
+Now: Sunday 2026/08/09 10:59
 Upcoming dates: Monday 2026/08/10, Tuesday 2026/08/11, Wednesday 2026/08/12, Thursday 2026/08/13, Friday 2026/08/14, Saturday 2026/08/15
 User sessions: [
     {
@@ -29,8 +29,8 @@ User sessions: [
         "room_id": 1,
         "room_type": "Squash Courts",
         "start_date": "2026-08-09",
-        "start_time": "10:35",
-        "duration": 15
+        "start_time": "10:53",
+        "duration": 3
     },
     {
         "session_id": 1,
@@ -75,19 +75,17 @@ I will add a session with the same details, but with a start_time of 15:00.
 
 
 # Input
-Schedule a sessions starting 2 minutes from now, and lasting only 3 minutes. Then one minute after that one ends, schedule another 3 minute session.
+Book a session for 2 minutes from now, lasting 5 minutes
 
 # Output (gpt-4o)
-Currently, it is Sunday 2026/08/09 and 10:36 AM. The user wants a session to start 2 minutes from now. Therefore, the first session will start at 10:38 AM and last for 3 minutes. Immediately after, there will be a 1-minute gap, meaning the next session will start at 10:42 AM. This second session will also last for 3 minutes.
+The user wants to book a session starting 2 minutes from now, which is currently Sunday, 2026/08/09 at 10:59, meaning the session should start at 11:01. The duration requested is 5 minutes. Since the user wants to play Squash, I will set the room_type to "Squash Courts".
 
-Let's schedule these sessions:
-
-1. The first session starting at 10:38 AM with a duration of 3 minutes.
 ```json
-{"action": "add", "room_type": "Squash Courts", "start_date": "2026-08-09", "start_time": "10:38", "duration": 3}
-```
-
-2. The second session starting at 10:42 AM with a duration of 3 minutes.
-```json
-{"action": "add", "room_type": "Squash Courts", "start_date": "2026-08-09", "start_time": "10:42", "duration": 3}
+{
+  "action": "add",
+  "room_type": "Squash Courts",
+  "start_date": "2026-08-09",
+  "start_time": "11:01",
+  "duration": 5
+}
 ```

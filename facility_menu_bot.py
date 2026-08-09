@@ -21,9 +21,10 @@ manager = FacilityManager(discoverer=DeviceDiscoverer(
         "192.168.137.0/24",  # Windows hotspot
         "192.168.1.0/24"     # Home network
     ],
-    exclude_ips=["192.168.1.226"]  # Exclude problematic IPs
+    # exclude_ips=["192.168.1.226"]  # Exclude problematic IPs
 ))
 session_manager = SessionManager(check_interval=5, sessions_file="sessions.txt")
+ADMIN_USER_IDS = ['50766180742', '5218114142626']  # Hardcoded admin user IDs
 
 # --- ADMIN OPTIONS ---
 async def show_system_status(convo: Convo):
@@ -108,9 +109,47 @@ async def control_all_lights(convo: Convo, state: int, action: str):
         await convo.send_message(f"❌ Error controlling lights: {str(e)}")
 
 async def show_schedule(convo: Convo, user: User):
-    """Display the schedule as an image."""
+    """Display the schedule as an image and list user's sessions."""
     try:
         await convo.send_message("⏳ Generating schedule...")
+        
+        # Get and display user's sessions textually
+        user_sessions = sorted(user.sessions, key=lambda s: s.start)
+        
+        if user_sessions:
+            session_lines = ["*📅 Your Booked Sessions:*\n"]
+            
+            for session in user_sessions:
+                # Find the schedule and room name for this session
+                room_name = f"Room {session.room}"
+                for schedule in schedules:
+                    if session.room in schedule.room_ids:
+                        room_name = schedule.name_map.get(session.room, f"Room {session.room}")
+                        break
+                
+                # Format the session info
+                start_str = session.start.format("%a %b %d, %I:%M %p")
+                end_str = session.end.format("%I:%M %p")
+                duration_hrs = session.span / 60
+                
+                # Status indicator
+                if session.has_ended():
+                    status = "✓ Completed"
+                elif session.has_started():
+                    status = "🟢 Ongoing"
+                else:
+                    status = "📅 Upcoming"
+                
+                session_lines.append(
+                    f"{status}\n"
+                    f"  *{room_name}*\n"
+                    f"  {start_str} - {end_str}\n"
+                    f"  Duration: {duration_hrs:.1f}h\n"
+                )
+            
+            await convo.send_message("\n".join(session_lines))
+        else:
+            await convo.send_message("*📅 Your Booked Sessions:*\n\nNo sessions booked.")
         
         # Create displayer and generate image
         displayer = ScheduleDisplayer(squash_schedule)
@@ -280,51 +319,46 @@ async def update_user_balance(convo: Convo, current_user: User):
 
 async def show_main_menu(convo: Convo, user: User) -> str:
     """Display main menu and return user's choice."""
-    choices = [
-            "📊 System Status",
-            "💡 Turn on light",
-            "🌙 Turn off light",
-            "✨ Turn on all",
-            "⚫ Turn off all",
-            "� View Schedule",            "🏟️ Manage Sessions",            "�💰 Update Balance"
-    ]
+    # Admin-only options
+    admin_actions = {
+        "📊 System Status": lambda: show_system_status(convo),
+        "💡 Turn on light": lambda: show_room_selection(convo, 1),
+        "🌙 Turn off light": lambda: show_room_selection(convo, 0),
+        "✨ Turn on all": lambda: control_all_lights(convo, state=1, action="on"),
+        "⚫ Turn off all": lambda: control_all_lights(convo, state=0, action="off"),
+        "💰 Update Balance": lambda: update_user_balance(convo, user),
+    }
+
+    # User options (available to all)
+    user_actions = {
+        "📅 View Schedule": lambda: show_schedule(convo, user),
+        "🏟️ Book or cancel a session": lambda: manage_sessions(convo, user),
+    }
+
+    # Build menu based on user privileges
+    is_admin = user.id in ADMIN_USER_IDS
+    menu_actions = {**admin_actions, **user_actions} if is_admin else user_actions
+
+    # Count user's sessions
+    user_sessions = user.sessions
+    ongoing = sum(1 for s in user_sessions if s.has_started() and not s.has_ended())
+    upcoming = sum(1 for s in user_sessions if not s.has_started())
+    
     msg = build_interactive(
         header="Facility Control",
-        body=f"*Balance: {user.credits} credits*\n\nWhat would you like to do?",
-        interactive=create_interactive_list( "Select", choices )
+        body=(
+            f"*Balance: {user.credits} credits*\n"
+            f"*Sessions: {ongoing} ongoing • {upcoming} upcoming*\n\n"
+            f"What would you like to do?"
+        ),
+        interactive=create_interactive_list("Select", list(menu_actions.keys()))
     )
     choice = (await convo.prompt(msg)).text
     
-    if choice == choices[0]:
-        await show_system_status(convo)
-    
-    elif choice == choices[1]:
-        # Turn on single light
-        await show_room_selection(convo, 1)
-    
-    elif choice == choices[2]:
-        # Turn off single light
-        await show_room_selection(convo, 0)
-    
-    elif choice == choices[3]:
-        # Turn on all lights
-        await control_all_lights(convo, state=1, action="on")
-    
-    elif choice == choices[4]:
-        # Turn off all lights
-        await control_all_lights(convo, state=0, action="off")
-    
-    elif choice == choices[5]:
-        # View schedule
-        await show_schedule(convo, user)
-    
-    elif choice == choices[6]:
-        # Manage sessions
-        await manage_sessions(convo, user)
-    
-    elif choice == choices[7]:
-        # Update balance
-        await update_user_balance(convo, user)
+    # Execute the selected action
+    action = menu_actions.get(choice)
+    if action:
+        await action()
 
 async def handle_conversation(convo: Convo):
     try:

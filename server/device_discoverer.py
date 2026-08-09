@@ -265,7 +265,7 @@ async def _demo():
             "192.168.137.0/24",  # Windows hotspot
             "192.168.1.0/24"     # Home network (check ipconfig at home)
         ],
-        exclude_ips=["192.168.1.226"]  # Exclude specific IPs from scanning
+        # exclude_ips=["192.168.1.226"]  # Exclude specific IPs from scanning
         # Or use scan_networks=None to auto-detect all networks
     )
     
