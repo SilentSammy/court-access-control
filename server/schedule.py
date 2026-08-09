@@ -5,9 +5,12 @@ import os
 import random
 from datetime import datetime, date, timedelta, time
 from string import Template
-from session import Session, Timestamp
+from server.session import Session, Timestamp
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Booking cancellation deadline (minutes before session start)
+CANCEL_DEADLINE_MINS = 30
 
 # Optional dependency: html2image is only needed for ScheduleDisplayer.display()
 try:
@@ -77,7 +80,7 @@ class ScheduleItem:
 
     def past_deadline(self):
         """True if the cancellation deadline has passed."""
-        return self.start - timedelta(minutes=Schedule.CANCEL_DEADLINE_MINS) < datetime.now()
+        return self.start - timedelta(minutes=CANCEL_DEADLINE_MINS) < datetime.now()
 
     def clone(self, start=None, end=None):
         return ScheduleItem(start or self.start, end or self.end, self.session, self.user)
@@ -194,7 +197,7 @@ class GlobalSchedule:
 class RoomSchedule:
     """Schedule view for a specific room or group of rooms."""
     
-    def __init__(self, global_schedule: GlobalSchedule, room_ids):
+    def __init__(self, global_schedule: GlobalSchedule, room_ids, name_map=None, name=None):
         """
         Args:
             global_schedule: The GlobalSchedule instance to query
@@ -203,8 +206,8 @@ class RoomSchedule:
         self.global_schedule = global_schedule
         # Normalize to list for consistent handling
         self.room_ids = room_ids if isinstance(room_ids, list) else [room_ids]
-        self.name_map = {}  # room_id -> display name mapping
-        self.name = None    # name for the entire room group
+        self.name_map = name_map if name_map is not None else {}  # room_id -> display name mapping
+        self.name = name    # name for the entire room group
     
     @property
     def schedule(self):
@@ -294,175 +297,6 @@ class RoomSchedule:
             gaps.append(ScheduleItem(sessions[i].end, sessions[i + 1].start))
         
         return gaps
-
-
-
-class Schedule:
-    CANCEL_DEADLINE_MINS = 30
-    LAST_UPDATE: float = 0
-    _SESSIONS: set = set()
-    _FILE_PATH = os.path.join(_DIR, 'schedule.csv')
-
-    # Room id → display name mapping.  Populated at startup from discovered devices.
-    ROOMS: dict = {}
-
-    def __init__(self, room=None):
-        self.room_id = room
-
-    # ── Internal helpers ───────────────────────────────────────────────────────
-
-    @classmethod
-    def _refresh_sessions(cls):
-        """Read sessions from the CSV file, discarding any that have ended."""
-        cls._SESSIONS.clear()
-        overwrite = False
-
-        if not os.path.exists(cls._FILE_PATH):
-            return
-
-        with open(cls._FILE_PATH, 'r', newline='') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if not row:
-                    continue
-                full_code = int(row[0])
-                user = row[1] if len(row) > 1 else ''
-                sess = Session.from_code(full_code)
-                if sess.has_ended():
-                    overwrite = True
-                    continue
-                try:
-                    cls._SESSIONS.add(ScheduleItem.from_session(sess, user))
-                except (OSError, ValueError, OverflowError):
-                    overwrite = True  # drop corrupted session
-                    continue
-
-        if overwrite:
-            cls.overwrite_sessions()
-
-    @classmethod
-    def get_schedule(cls):
-        """Return sorted sessions, re-reading from disk when the file changes."""
-        if not os.path.exists(cls._FILE_PATH):
-            return []
-        if os.path.getmtime(cls._FILE_PATH) > cls.LAST_UPDATE:
-            cls.LAST_UPDATE = os.path.getmtime(cls._FILE_PATH)
-            cls._refresh_sessions()
-        return sorted(cls._SESSIONS, key=lambda s: s.start)
-
-    # ── Instance helpers ───────────────────────────────────────────────────────
-
-    @property
-    def schedule(self):
-        """All sessions, optionally filtered to this room."""
-        all_sessions = Schedule.get_schedule()
-        if self.room_id is None:
-            return all_sessions
-        return [s for s in all_sessions if s.session.room == self.room_id]
-
-    def get_gaps(self, start=None, sessions=None):
-        """Return gaps between sessions starting from a given datetime."""
-        sessions = sorted(sessions, key=lambda s: s.start) if sessions else self.schedule
-        if start:
-            sessions = [s for s in sessions if s.end >= start]
-        if not sessions:
-            return []
-
-        gaps = []
-        if start and start < sessions[0].start:
-            gaps.append(ScheduleItem(start, sessions[0].start))
-
-        for i in range(len(sessions) - 1):
-            gaps.append(ScheduleItem(sessions[i].end, sessions[i + 1].start))
-
-        return gaps
-
-    def is_available(self, session: Session) -> bool:
-        """True if the session does not conflict with any existing booking."""
-        return not any(si.session.conflicts_with(session) for si in self.schedule)
-
-    def add_session(self, session: Session, user: str) -> bool:
-        """Book a session.  Returns False if the slot is taken."""
-        if not self.is_available(session):
-            return False
-
-        item = ScheduleItem.from_session(session, user)
-        Schedule._SESSIONS.add(item)
-
-        # Ensure the file exists
-        os.makedirs(os.path.dirname(Schedule._FILE_PATH), exist_ok=True)
-        with open(Schedule._FILE_PATH, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([session.full_code, user])
-
-        Schedule.LAST_UPDATE = os.path.getmtime(Schedule._FILE_PATH)
-        return True
-
-    @staticmethod
-    def delete_session(session: Session) -> bool:
-        """Remove a session from storage."""
-        item = next(
-            (s for s in Schedule.get_schedule() if s.session.full_code == session.full_code),
-            None
-        )
-        if item is None:
-            return False
-        try:
-            Schedule._SESSIONS.discard(item)
-            Schedule.overwrite_sessions()
-            return True
-        except Exception:
-            return False
-
-    @staticmethod
-    def overwrite_sessions():
-        """Rewrite the CSV from the in-memory set."""
-        sessions = Schedule.get_schedule()
-        with open(Schedule._FILE_PATH, 'w', newline='') as f:
-            writer = csv.writer(f)
-            for item in sessions:
-                writer.writerow([item.session.full_code, item.user])
-        Schedule.LAST_UPDATE = os.path.getmtime(Schedule._FILE_PATH)
-
-    @staticmethod
-    def get_user_schedule(user: str):
-        """Return ScheduleItems belonging to the given user."""
-        return [s for s in Schedule.get_schedule() if s.user == user]
-
-    # New helper methods for grouped rooms
-    @staticmethod
-    def find_available_room(room_ids: list, start: int, span: int):
-        """Try each room in room_ids and return the first available Session, or None.
-
-        Builds a correctly-roomed Session per candidate and delegates to
-        the existing is_available() -> conflicts_with() chain.
-        """
-        for rid in room_ids:
-            candidate = Session(start, span, int(rid))
-            if Schedule(int(rid)).is_available(candidate):
-                return candidate
-        return None
-
-    @staticmethod
-    def max_instant_duration(room_ids: list, start: int, max_minutes: int = 120) -> int:
-        """Return the longest bookable duration (minutes) available right now across
-        any room in room_ids, capped at max_minutes.  Returns 0 if no room is free."""
-        start_dt = datetime.fromtimestamp(start)
-        best = 0
-        for rid in room_ids:
-            sch = Schedule(int(rid))
-            sessions = sch.schedule
-            # Skip if any session is active right now
-            if any(si.start <= start_dt < si.end for si in sessions):
-                continue
-            # Find the earliest session starting after `start`
-            future = [si for si in sessions if si.start > start_dt]
-            if not future:
-                return max_minutes  # fully free — no need to look further
-            earliest = min(future, key=lambda si: si.start)
-            free_mins = int((earliest.start - start_dt).total_seconds() / 60)
-            best = max(best, min(free_mins, max_minutes))
-        return best
 
 
 # ── Visual display (requires html2image) ──────────────────────────────────────
@@ -707,22 +541,6 @@ class ScheduleDisplayer:
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
-def add_random_sessions(n=1, schedule: Schedule = None, days=5, day_offset=None):
-    start = datetime.now()
-    if day_offset is not None:
-        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        start += timedelta(days=day_offset)
-    else:
-        start = start.replace(minute=0, second=0, microsecond=0)
-        start += timedelta(hours=1)
-
-    intervals = [random.randint(0, 24 * days) for _ in range(n)]
-    datetimes = [start + timedelta(hours=i) for i in intervals]
-    sessions = [Session(int(dt.timestamp()), 120, schedule.room_id) for dt in datetimes]
-
-    for session in sessions:
-        added = schedule.add_session(session, 'test_user')
-        print(f"{'Added' if added else 'Not added (conflict)'} session {session.full_code}")
 
 if __name__ == '__main__':
     import tempfile, shutil

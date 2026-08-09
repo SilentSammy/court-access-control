@@ -4,6 +4,8 @@ import asyncio
 
 # Business logic imports
 from server.facility import FacilityManager, DeviceDiscoverer
+from server.user import User
+from schedule_config import global_schedule
 
 agent = WAppAgent(config_file=os.path.dirname(os.path.abspath(__file__))+'\\wapp.json')
 manager = FacilityManager(discoverer=DeviceDiscoverer(
@@ -98,7 +100,7 @@ async def control_all_lights(convo: Convo, state: int, action: str):
     except Exception as e:
         await convo.send_message(f"❌ Error controlling lights: {str(e)}")
 
-async def show_main_menu(convo: Convo) -> str:
+async def show_main_menu(convo: Convo, user: User) -> str:
     """Display main menu and return user's choice."""
     choices = [
             "📊 System Status",
@@ -109,7 +111,7 @@ async def show_main_menu(convo: Convo) -> str:
     ]
     msg = build_interactive(
         header="Facility Control",
-        body="*What would you like to do?*",
+        body=f"*Balance: {user.credits} credits*\n\nWhat would you like to do?",
         interactive=create_interactive_list( "Select", choices )
     )
     choice = (await convo.prompt(msg)).text
@@ -138,11 +140,14 @@ async def handle_conversation(convo: Convo):
         first_msg = await convo.wait_for_message()
         user_id = convo.user_id
         user_name = convo.user_name or "User"
+        
+        # Create User instance with global schedule
+        user = User(user_id, global_schedule)
 
         await convo.send_message(f"👋 Hello, {user_name}!")
 
         while True:
-            await show_main_menu(convo)
+            await show_main_menu(convo, user)
 
     except Exception as e:
         print(f"Error in conversation: {e}")
