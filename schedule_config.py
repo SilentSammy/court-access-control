@@ -11,3 +11,4 @@ squash_schedule = RoomSchedule(
         3: "Squash 3"
     }
 )
+schedules = [squash_schedule]

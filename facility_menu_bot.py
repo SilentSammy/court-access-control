@@ -5,7 +5,9 @@ import asyncio
 # Business logic imports
 from server.facility import FacilityManager, DeviceDiscoverer
 from server.user import User
-from schedule_config import global_schedule
+from schedule_config import global_schedule, squash_schedule
+from server.schedule import ScheduleDisplayer
+from wapp.wapp_agent import build_media
 
 agent = WAppAgent(config_file=os.path.dirname(os.path.abspath(__file__))+'\\wapp.json')
 manager = FacilityManager(discoverer=DeviceDiscoverer(
@@ -100,6 +102,64 @@ async def control_all_lights(convo: Convo, state: int, action: str):
     except Exception as e:
         await convo.send_message(f"❌ Error controlling lights: {str(e)}")
 
+async def show_schedule(convo: Convo, user: User):
+    """Display the schedule as an image."""
+    try:
+        await convo.send_message("⏳ Generating schedule...")
+        
+        # Create displayer and generate image
+        displayer = ScheduleDisplayer(squash_schedule)
+        displayer.user_id = user.id  # Highlight user's sessions
+        image_path = displayer.display()
+        
+        # Upload and send the image
+        media_id = await convo.agent.upload_media(image_path)
+        await convo.send_message(build_media(media_id))
+        
+    except Exception as e:
+        await convo.send_message(f"❌ Error displaying schedule: {str(e)}")
+
+async def update_user_balance(convo: Convo, current_user: User):
+    """Update balance for self or another user."""
+    try:
+        # Ask for user ID with "Me" button
+        msg = build_interactive(
+            body="Select yourself or type another user ID:",
+            interactive=create_interactive_buttons(["Me"])
+        )
+        response = await convo.prompt(msg)
+        target_user_id = response.text.strip()
+        
+        if target_user_id.lower() == "me":
+            target_user_id = current_user.id
+        
+        # Ask for new balance
+        await convo.send_message(f"Enter new balance for user `{target_user_id}`:\n(Use +/- to add/subtract, or enter absolute value)")
+        response2 = await convo.wait_for_message()
+        
+        balance_input = response2.text.strip()
+        target_user = User(target_user_id, global_schedule)
+        
+        try:
+            # Check if it's a relative change (+ or -)
+            if balance_input.startswith('+') or balance_input.startswith('-'):
+                change = int(balance_input)
+                old_balance = target_user.credits
+                new_balance = old_balance + change
+                target_user.credits = new_balance
+                await convo.send_message(f"✅ Balance updated!\nUser: {target_user_id}\nOld Balance: {old_balance} credits\nChange: {change:+d} credits\nNew Balance: {new_balance} credits")
+            else:
+                # Absolute value
+                new_balance = int(balance_input)
+                target_user.credits = new_balance
+                await convo.send_message(f"✅ Balance updated!\nUser: {target_user_id}\nNew Balance: {new_balance} credits")
+        except ValueError:
+            await convo.send_message("❌ Invalid balance amount. Must be a number.")
+            return
+        
+    except Exception as e:
+        await convo.send_message(f"❌ Error updating balance: {str(e)}")
+
 async def show_main_menu(convo: Convo, user: User) -> str:
     """Display main menu and return user's choice."""
     choices = [
@@ -107,7 +167,9 @@ async def show_main_menu(convo: Convo, user: User) -> str:
             "💡 Turn on light",
             "🌙 Turn off light",
             "✨ Turn on all",
-            "⚫ Turn off all"
+            "⚫ Turn off all",
+            "� View Schedule",
+            "�💰 Update Balance"
     ]
     msg = build_interactive(
         header="Facility Control",
@@ -134,17 +196,22 @@ async def show_main_menu(convo: Convo, user: User) -> str:
     elif choice == choices[4]:
         # Turn off all lights
         await control_all_lights(convo, state=0, action="off")
+    
+    elif choice == choices[5]:
+        # View schedule
+        await show_schedule(convo, user)
+    
+    elif choice == choices[6]:
+        # Update balance
+        await update_user_balance(convo, user)
 
 async def handle_conversation(convo: Convo):
     try:
-        first_msg = await convo.wait_for_message()
+        first_msg = await convo.wait_for_message() # Discard first message
         user_id = convo.user_id
-        user_name = convo.user_name or "User"
         
         # Create User instance with global schedule
         user = User(user_id, global_schedule)
-
-        await convo.send_message(f"👋 Hello, {user_name}!")
 
         while True:
             await show_main_menu(convo, user)

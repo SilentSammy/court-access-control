@@ -114,8 +114,10 @@ class GlobalSchedule:
     def get_schedule(self):
         """Return sorted sessions, re-reading from disk when the file changes."""
         if not os.path.exists(self.file_path):
-            # Create the file if it doesn't exist
-            os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+            # Create the directory if it doesn't exist (only if there's a directory in the path)
+            dir_path = os.path.dirname(self.file_path)
+            if dir_path:  # Only create directory if path contains a directory
+                os.makedirs(dir_path, exist_ok=True)
             return []
         if os.path.getmtime(self.file_path) > self.last_update:
             self.last_update = os.path.getmtime(self.file_path)
@@ -164,8 +166,10 @@ class GlobalSchedule:
         item = ScheduleItem.from_session(session, user)
         self._sessions.add(item)
 
-        # Ensure the file exists
-        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+        # Ensure the directory exists (only if there's a directory in the path)
+        dir_path = os.path.dirname(self.file_path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
         with open(self.file_path, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([session.full_code, user])
