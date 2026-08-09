@@ -17,7 +17,7 @@ class DeviceDiscoverer:
             cls._instance = super().__new__(cls)
         return cls._instance
     
-    def __init__(self, discovery_interval=60, health_check_interval=5, cache_file=None, scan_networks=None, check_localhost=True):
+    def __init__(self, discovery_interval=60, health_check_interval=5, cache_file=None, scan_networks=None, check_localhost=True, exclude_ips=None):
         """Initialize discoverer with scan intervals.
         
         Args:
@@ -28,6 +28,7 @@ class DeviceDiscoverer:
                           If None, auto-detects and scans all local networks with /24 assumption
                           If empty list, no scanning is performed
             check_localhost: If True, also check localhost:8001 for mock server
+            exclude_ips: List of IP addresses to exclude from scanning (e.g., ["192.168.1.226"])
         """
         if hasattr(self, '_initialized'):
             return
@@ -41,6 +42,7 @@ class DeviceDiscoverer:
         )
         self.scan_networks = scan_networks
         self.check_localhost = check_localhost
+        self.exclude_ips = set(exclude_ips or [])
         
         self.devices = {}  # ip -> {device_type, endpoints, last_seen}
         self.endpoint_map = {}  # endpoint -> ip
@@ -171,7 +173,9 @@ class DeviceDiscoverer:
         tasks = []
         for network in networks:
             for ip in network.hosts():
-                tasks.append(check_with_semaphore(str(ip)))
+                ip_str = str(ip)
+                if ip_str not in self.exclude_ips:
+                    tasks.append(check_with_semaphore(ip_str))
         
         for coro in asyncio.as_completed(tasks):
             device = await coro
@@ -260,7 +264,8 @@ async def _demo():
         scan_networks=[
             "192.168.137.0/24",  # Windows hotspot
             "192.168.1.0/24"     # Home network (check ipconfig at home)
-        ]
+        ],
+        exclude_ips=["192.168.1.226"]  # Exclude specific IPs from scanning
         # Or use scan_networks=None to auto-detect all networks
     )
     

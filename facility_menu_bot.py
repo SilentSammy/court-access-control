@@ -9,6 +9,7 @@ from schedule_config import global_schedule, squash_schedule, schedules
 from server.schedule import ScheduleDisplayer
 from server.smart_scheduler import SmartScheduler
 from server.schedule_edit import ScheduleEdit
+from server.session_manager import SessionManager
 from wapp.wapp_agent import build_media
 
 agent = WAppAgent(config_file=os.path.dirname(os.path.abspath(__file__))+'\\wapp.json')
@@ -19,8 +20,10 @@ manager = FacilityManager(discoverer=DeviceDiscoverer(
     scan_networks=[
         "192.168.137.0/24",  # Windows hotspot
         "192.168.1.0/24"     # Home network
-    ]
+    ],
+    exclude_ips=["192.168.1.226"]  # Exclude problematic IPs
 ))
+session_manager = SessionManager(check_interval=5, sessions_file="sessions.txt")
 
 # --- ADMIN OPTIONS ---
 async def show_system_status(convo: Convo):
@@ -212,6 +215,12 @@ async def manage_sessions(convo: Convo, user: User):
             cancelled = edit.cancel_sessions()
             booked = edit.book_sessions()
             
+            # Sync with hardware control queue
+            for sess in booked:
+                session_manager.add_session(sess)
+            for sess in cancelled:
+                session_manager.remove_session(sess)
+            
             result_msg = (
                 f"✅ *Changes applied!*\n"
                 f"  • Booked: {len(booked)} session(s)\n"
@@ -332,7 +341,49 @@ async def handle_conversation(convo: Convo):
         print(f"Error in conversation: {e}")
 
 async def main():
+    """Main entry point - start discovery, session manager, and agent."""
+    print("Starting facility manager with device discovery...")
     manager.start_discovery()
+    
+    # Get the event loop for session callbacks
+    loop = asyncio.get_running_loop()
+    
+    # Set up session manager callbacks to control lights
+    def on_session_start(session):
+        print(f"[SessionManager] Starting session for room {session.room}")
+        
+        # Turn on lights (schedule coroutine from thread)
+        future = asyncio.run_coroutine_threadsafe(
+            manager.control_lights(str(session.room), 1),
+            loop
+        )
+        try:
+            result = future.result(timeout=5)
+            print(f"[SessionManager] Lights ON for room {session.room}: {result}")
+        except Exception as e:
+            print(f"[SessionManager] Error turning lights ON: {e}")
+    
+    def on_session_end(session):
+        print(f"[SessionManager] Ending session for room {session.room}")
+        
+        # Turn off lights (schedule coroutine from thread)
+        future = asyncio.run_coroutine_threadsafe(
+            manager.control_lights(str(session.room), 0),
+            loop
+        )
+        try:
+            result = future.result(timeout=5)
+            print(f"[SessionManager] Lights OFF for room {session.room}: {result}")
+        except Exception as e:
+            print(f"[SessionManager] Error turning lights OFF: {e}")
+    
+    session_manager.start_session = on_session_start
+    session_manager.end_session = on_session_end
+    
+    print("Starting session manager...")
+    session_manager.start()
+    
+    print("Starting WhatsApp agent...")
     await agent.start(handle_conversation)
 
 asyncio.run(main())
