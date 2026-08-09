@@ -1,6 +1,6 @@
-from session import Session, Timestamp
-from schedule import GlobalSchedule, RoomSchedule, ScheduleItem
-from user import User
+from server.session import Session, Timestamp
+from server.schedule import GlobalSchedule, RoomSchedule, ScheduleItem
+from server.user import User
 
 COST_PER_MINUTE = 1  # credits charged per minute of session time
 
@@ -65,16 +65,20 @@ class ScheduleEdit:
         """
         Remove sessions-to-add that conflict with each other or with the
         existing schedule (excluding sessions being cancelled in the same edit).
+        
+        Note: Allows overlapping sessions for the same user across different rooms
+        (e.g., a coach booking multiple courts simultaneously).
         """
         before = list(self.sessions_to_add)
 
-        # De-duplicate within the batch (keep first occurrence)
+        # Remove sessions that conflict in the SAME room (keep first occurrence)
         temp = list(self.sessions_to_add)
         self.sessions_to_add = []
         while temp:
             candidate = temp.pop(0)
             self.sessions_to_add.append(candidate)
-            temp = [s for s in temp if not s.conflicts_with(candidate)]
+            # Only remove if same room AND time conflict
+            temp = [s for s in temp if not (s.room == candidate.room and s.conflicts_with(candidate))]
 
         # Check against the existing schedule for each room
         for room in set(s.room for s in self.sessions_to_add):

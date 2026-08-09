@@ -5,8 +5,10 @@ import asyncio
 # Business logic imports
 from server.facility import FacilityManager, DeviceDiscoverer
 from server.user import User
-from schedule_config import global_schedule, squash_schedule
+from schedule_config import global_schedule, squash_schedule, schedules
 from server.schedule import ScheduleDisplayer
+from server.smart_scheduler import SmartScheduler
+from server.schedule_edit import ScheduleEdit
 from wapp.wapp_agent import build_media
 
 agent = WAppAgent(config_file=os.path.dirname(os.path.abspath(__file__))+'\\wapp.json')
@@ -119,6 +121,113 @@ async def show_schedule(convo: Convo, user: User):
     except Exception as e:
         await convo.send_message(f"❌ Error displaying schedule: {str(e)}")
 
+async def manage_sessions(convo: Convo, user: User):
+    """Manage user sessions - book or cancel sessions."""
+    try:
+        # Show the schedule first
+        await show_schedule(convo, user)
+        
+        # Prompt for natural language input
+        await convo.send_message("💬 Tell me what you'd like to do (e.g., 'book Squash tomorrow at 3pm for 1h' or 'cancel my Saturday sessions'):")
+        response = await convo.wait_for_message()
+        user_input = response.text.strip()
+        
+        await convo.send_message("⏳ Processing your request...")
+        
+        # Parse natural language using SmartScheduler
+        scheduler = SmartScheduler(user, schedules)
+        raw_response = scheduler.process_user_message(user_input)
+        session_dicts = scheduler.parse_response(raw_response)
+        
+        if not session_dicts:
+            await convo.send_message("❌ Could not understand your request. Please try again.")
+            return
+        
+        # Convert to session objects
+        sessions_to_add, sessions_to_cancel = scheduler.segregate_sessions(session_dicts)
+        sessions_to_add = scheduler.try_get_sessions(sessions_to_add)
+        sessions_to_cancel = scheduler.try_get_sessions(sessions_to_cancel)
+        
+        if not sessions_to_add and not sessions_to_cancel:
+            await convo.send_message("❌ No valid sessions found. Please check your request.")
+            return
+        
+        # Create schedule edit and apply filters
+        edit = ScheduleEdit(user, global_schedule, sessions_to_add, sessions_to_cancel)
+        edit.apply_all_filters()
+        
+        if not edit.sessions_to_add and not edit.sessions_to_cancel:
+            await convo.send_message("❌ No valid sessions after filtering (conflicts, affordability, etc.)")
+            return
+        
+        # Show single unified preview with all changes
+        await convo.send_message(f"📊 Preview: {len(edit.sessions_to_add)} to add, {len(edit.sessions_to_cancel)} to cancel")
+        
+        # Determine which schedules are affected
+        affected_room_ids = set()
+        for session in edit.all_sessions:
+            affected_room_ids.add(session.room)
+        
+        # Get all schedules that contain affected rooms
+        affected_schedules = []
+        for schedule in schedules:
+            if any(room_id in schedule.room_ids for room_id in affected_room_ids):
+                affected_schedules.append(schedule)
+        
+        # If no affected schedules found, fall back to all schedules
+        if not affected_schedules:
+            affected_schedules = schedules
+        
+        # Create a single displayer with all affected schedules
+        displayer = ScheduleDisplayer(affected_schedules)
+        displayer.user_id = user.id
+        displayer.sessions_to_add = edit.sessions_to_add
+        displayer.sessions_to_cancel = edit.sessions_to_cancel
+        preview_path = displayer.display()
+        
+        # Upload and send the unified preview
+        media_id = await convo.agent.upload_media(preview_path)
+        await convo.send_message(build_media(media_id))
+        
+        # Show cost summary
+        cost_msg = (
+            f"💰 *Cost Summary:*\n"
+            f"  • To add: {edit.cost_to_add} credits\n"
+            f"  • Refund: {edit.cancellation_refund} credits\n"
+            f"  • Net cost: {edit.net_cost} credits\n"
+            f"  • Current balance: {user.credits} credits\n"
+            f"  • New balance: {user.credits - edit.net_cost} credits"
+        )
+        await convo.send_message(cost_msg)
+        
+        # Prompt for confirmation
+        confirm_msg = build_interactive(
+            body="Confirm these changes?",
+            interactive=create_interactive_buttons(["✅ Confirm", "❌ Cancel"])
+        )
+        confirmation = await convo.prompt(confirm_msg)
+        
+        if "confirm" in confirmation.text.lower():
+            # Apply changes
+            cancelled = edit.cancel_sessions()
+            booked = edit.book_sessions()
+            
+            result_msg = (
+                f"✅ *Changes applied!*\n"
+                f"  • Booked: {len(booked)} session(s)\n"
+                f"  • Cancelled: {len(cancelled)} session(s)\n"
+                f"  • New balance: {user.credits} credits"
+            )
+            await convo.send_message(result_msg)
+            
+            # Show updated schedule
+            await show_schedule(convo, user)
+        else:
+            await convo.send_message("❌ Changes cancelled. No modifications were made.")
+        
+    except Exception as e:
+        await convo.send_message(f"❌ Error managing sessions: {str(e)}")
+
 async def update_user_balance(convo: Convo, current_user: User):
     """Update balance for self or another user."""
     try:
@@ -168,8 +277,7 @@ async def show_main_menu(convo: Convo, user: User) -> str:
             "🌙 Turn off light",
             "✨ Turn on all",
             "⚫ Turn off all",
-            "� View Schedule",
-            "�💰 Update Balance"
+            "� View Schedule",            "🏟️ Manage Sessions",            "�💰 Update Balance"
     ]
     msg = build_interactive(
         header="Facility Control",
@@ -202,6 +310,10 @@ async def show_main_menu(convo: Convo, user: User) -> str:
         await show_schedule(convo, user)
     
     elif choice == choices[6]:
+        # Manage sessions
+        await manage_sessions(convo, user)
+    
+    elif choice == choices[7]:
         # Update balance
         await update_user_balance(convo, user)
 

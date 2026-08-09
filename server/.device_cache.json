@@ -1,1 +1,1 @@
-{"devices": {"127.0.0.1:8001": {"ip": "127.0.0.1:8001", "device_type": "light_controller", "endpoints": ["1/lights", "2/lights", "3/lights"], "last_seen": "2026-08-08T19:52:32.532269"}}}
+{"devices": {"127.0.0.1:8001": {"ip": "127.0.0.1:8001", "device_type": "light_controller", "endpoints": ["1/lights", "2/lights", "3/lights"], "last_seen": "2026-08-08T21:55:46.465478"}}}
