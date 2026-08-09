@@ -1,0 +1,297 @@
+body {
+    margin: 0;
+    font-family: Roboto, sans-serif;
+    height: 100vh;
+    background-color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.main-container {
+    display: flex;
+    flex-direction: row;
+    flex-grow: 1;
+
+}
+
+.title {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 0;
+    background-color: #f8f9fa;
+    padding: 5px;
+    gap: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    justify-content: center;
+    writing-mode: vertical-rl;
+    margin: 0;
+    font-size: 3em;
+}
+.title:empty {
+    display: none;
+}
+
+.legend {
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    background-color: #f8f9fa99;
+
+    position: absolute;
+    top: 0;
+    right: 0;
+    margin: 0px 5px;
+    overflow: hidden;
+}
+.legend > h2 {
+    margin: 0;
+    padding: 5px;
+    opacity: 0.8;
+}
+.legend-item {
+    margin: 5px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+}
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+}
+.legend-timeline {
+    border-top: 2px dashed red;
+    width: 20px;
+}
+
+.rows {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    gap: 5px;
+}
+
+.row {
+    display: flex;
+    flex-direction: row;
+    flex-grow: 1;
+}
+.header.row {
+    flex-grow: 0;
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    flex-grow: 1;
+    overflow: hidden;
+    padding: 0px 5px;
+}
+.column.layer {
+    padding: 0px 0px;
+}
+.hour.column {
+    flex-grow: 0;
+    min-width: 75px;
+}
+
+/*CELL*/
+.cell {
+    flex: 1;
+    flex-grow: 1;
+    overflow: hidden;
+}
+.event.cell {
+    /* background-color: #28a745; */
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.start.cell {
+    border-radius: 10px 10px 0px 0px;
+}
+.end.cell {
+    border-radius: 0px 0px 10px 10px;
+}
+.event.cell > * {
+    margin: 0;
+    padding: 0px 10px;
+    font-weight: bold;
+    justify-self: center;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.tiny.cell {
+    border-radius: 0;
+}
+.tiny.cell > * {
+    font-size: 0.4em;
+    font-style: italic;
+}
+.hour.cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+.header.cell {
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+.header.cell > * {
+    font-weight: bold;
+    padding: 0px 10px;
+}
+.cell.double {
+    flex-grow: 2;
+}
+.event.cell.double {
+    background-color: crimson;
+}
+
+.timeline {
+    border-top: 2px dashed red;
+}
+
+/*LAYERS*/
+.layers {
+    position: relative;
+}
+.layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+.alternating.layer {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+.alternating.layer > div {
+    flex-grow: 1;
+}
+.alternating.layer > div:nth-child(even) {
+    background-color: #ddd;
+}
+
+/*COLORS*/
+.red-bg {
+    background-color: #dc3545;
+    color: white;
+}
+button.red-bg:hover, .hvr.red-bg:hover {
+    background-color: #c82333;
+}
+
+.green-bg {
+    background-color: #28a745;
+    color: white;
+}
+button.green-bg:hover, .hvr.green-bg:hover {
+    background-color: #218838;
+}
+
+.blue-bg {
+    background-color: #007bff;
+    color: white;
+}
+button.blue-bg:hover, .hvr.blue-bg:hover {
+    background-color: #0069d9;
+}
+
+.yellow-bg {
+    background-color: #ffc107;
+    color: white;
+}
+button.yellow-bg:hover, .hvr.yellow-bg:hover {
+    background-color: #e0a800;
+}
+
+.orange-bg {
+    background-color: #fd7e14;
+    color: white;
+}
+button.orange-bg:hover, .hvr.orange-bg:hover {
+    background-color: #d66e0a;
+}
+
+.purple-bg {
+    background-color: #6f42c1;
+    color: white;
+}
+button.purple-bg:hover, .hvr.purple-bg:hover {
+    background-color: #5a32b5;
+}
+
+.pink-bg {
+    background-color: #e83e8c;
+    color: white;
+}
+button.pink-bg:hover, .hvr.pink-bg:hover {
+    background-color: #d81c75;
+}
+
+.teal-bg {
+    background-color: #20c997;
+    color: white;
+}
+button.teal-bg:hover, .hvr.teal-bg:hover {
+    background-color: #1d9b82;
+}
+
+.dteal-bg /*I think this is dark teal? 00796b*/ {
+    background-color: #00796b;
+    color: white;
+}
+button.dteal-bg:hover, .hvr.dteal-bg:hover {
+    background-color: #005b4f;
+}
+
+.cyan-bg {
+    background-color: #17a2b8;
+    color: white;
+}
+button.cyan-bg:hover, .hvr.cyan-bg:hover {
+    background-color: #138496;
+}
+
+.white-bg {
+    background-color: #fff;
+    color: #212529;
+}
+button.white-bg:hover, .hvr.white-bg:hover {
+    background-color: #e6e6e6;
+}
+
+.black-bg {
+    background-color: #000;
+    color: white;
+}
+button.black-bg:hover, .hvr.black-bg:hover {
+    background-color: #212529;
+}
+
+.gray-bg {
+    background-color: #6c757d;
+    color: white;
+}
+button.gray-bg:hover, .hvr.gray-bg:hover {
+    background-color: #5a6268;
+}
+
+.lgray-bg {
+    background-color: #d3d3d3;
+    color: #212529;
+}
+button.lgray-bg:hover, .hvr.lgray-bg:hover {
+    background-color: #c0c0c0;
+}

@@ -16,6 +16,7 @@ manager = FacilityManager(discoverer=DeviceDiscoverer(
     ]
 ))
 
+# --- ADMIN OPTIONS ---
 async def show_system_status(convo: Convo):
     """Display all rooms and their current status."""
     try:
