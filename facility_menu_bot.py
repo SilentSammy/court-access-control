@@ -108,6 +108,29 @@ async def control_all_lights(convo: Convo, state: int, action: str):
     except Exception as e:
         await convo.send_message(f"❌ Error controlling lights: {str(e)}")
 
+async def toggle_room_light(convo: Convo, room_id: str):
+    """Toggle a room's light on/off."""
+    try:
+        # Get current status
+        status = await manager.get_room_status(room_id=room_id)
+        if "error" in status:
+            await convo.send_message(f"❌ Error getting status: {status['error']}")
+            return
+        
+        # Toggle state
+        current_state = status.get("light", "unknown").lower()
+        new_state = 0 if current_state == "on" else 1
+        
+        result = await manager.control_lights(room_id=room_id, state=new_state)
+        if "error" not in result:
+            light_status = result.get("light", "unknown").upper()
+            emoji = "💡" if light_status == "ON" else "🌙"
+            await convo.send_message(f"{emoji} Room {room_id} light turned {light_status.lower()}")
+        else:
+            await convo.send_message(f"❌ Error: {result['error']}")
+    except Exception as e:
+        await convo.send_message(f"❌ Error toggling light: {str(e)}")
+
 async def show_schedule(convo: Convo, user: User):
     """Display the schedule as an image and list user's sessions."""
     try:
@@ -318,12 +341,10 @@ async def update_user_balance(convo: Convo, current_user: User):
         await convo.send_message(f"❌ Error updating balance: {str(e)}")
 
 async def show_main_menu(convo: Convo, user: User) -> str:
-    """Display main menu and return user's choice."""
-    # Admin-only options
+    """Display main menu with room controls and return user's choice."""
+    # Admin-only options (non-room)
     admin_actions = {
         "📊 System Status": lambda: show_system_status(convo),
-        "💡 Turn on light": lambda: show_room_selection(convo, 1),
-        "🌙 Turn off light": lambda: show_room_selection(convo, 0),
         "✨ Turn on all": lambda: control_all_lights(convo, state=1, action="on"),
         "⚫ Turn off all": lambda: control_all_lights(convo, state=0, action="off"),
         "💰 Update Balance": lambda: update_user_balance(convo, user),
@@ -332,12 +353,27 @@ async def show_main_menu(convo: Convo, user: User) -> str:
     # User options (available to all)
     user_actions = {
         "📅 View Schedule": lambda: show_schedule(convo, user),
-        "🏟️ Book or cancel a session": lambda: manage_sessions(convo, user),
+        "🏟️ Book or cancel": lambda: manage_sessions(convo, user),
     }
+
+    # Get room statuses and build room options (admin only)
+    room_actions = {}
+    if user.id in ADMIN_USER_IDS:
+        try:
+            rooms = manager.get_room_ids()
+            for room_id in rooms:
+                status = await manager.get_room_status(room_id=room_id)
+                if "error" not in status:
+                    light_state = status.get("light", "unknown").lower()
+                    emoji = "💡" if light_state == "on" else "🌙"
+                    room_label = f"{emoji} Room {room_id}"
+                    room_actions[room_label] = (lambda rid=room_id: toggle_room_light(convo, rid))
+        except Exception as e:
+            print(f"Error loading rooms: {e}")
 
     # Build menu based on user privileges
     is_admin = user.id in ADMIN_USER_IDS
-    menu_actions = {**admin_actions, **user_actions} if is_admin else user_actions
+    menu_actions = {**room_actions, **admin_actions, **user_actions} if is_admin else user_actions
 
     # Count user's sessions
     user_sessions = user.sessions
