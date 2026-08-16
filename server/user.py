@@ -21,6 +21,11 @@ class User:
         """Return the user's monetary balance from database activities."""
         return UserManager.get_user_balance(self.id)
 
+    @balance.setter
+    def balance(self, value):
+        """Set the user's balance in pesos using a Pago adjustment."""
+        UserManager.update_balance(self.id, value)
+
     @property
     def name(self):
         """Return the user's database name, falling back to their ID."""
@@ -155,12 +160,18 @@ class UserManager:
     @classmethod
     def update_credits(cls, user_id: str, credits):
         """Set credits by adding the missing amount as a Pago activity."""
+        target_balance = Decimal(str(credits)) * Decimal(CREDIT_VALUE)
+        return cls.update_balance(user_id, target_balance)
+
+    @classmethod
+    def update_balance(cls, user_id: str, balance):
+        """Set a peso balance by adding the missing amount as a Pago activity."""
         contact_id = get_contact_id(user_id)
         if contact_id is None:
             raise ValueError(f"No database contact found for WhatsApp number {user_id}")
 
         current_balance = Decimal(str(cls.get_user_balance(user_id)))
-        target_balance = Decimal(str(credits)) * Decimal(CREDIT_VALUE)
+        target_balance = Decimal(str(balance))
         missing_amount = target_balance - current_balance
 
         if missing_amount == 0:

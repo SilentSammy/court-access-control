@@ -299,7 +299,10 @@ async def update_user_balance(convo: Convo, current_user: User):
             target_user_id = current_user.id
         
         # Ask for new balance
-        await convo.send_message(f"Enter new balance for user `{target_user_id}`:\n(Use +/- to add/subtract, or enter absolute value)")
+        await convo.send_message(
+            f"Enter the new balance in pesos for user `{target_user_id}`:\n"
+            "Use +/- to add or subtract pesos, or enter an absolute peso balance."
+        )
         response2 = await convo.wait_for_message()
         
         balance_input = response2.text.strip()
@@ -309,17 +312,29 @@ async def update_user_balance(convo: Convo, current_user: User):
             # Check if it's a relative change (+ or -)
             if balance_input.startswith('+') or balance_input.startswith('-'):
                 change = int(balance_input)
-                old_balance = target_user.credits
+                old_balance = target_user.balance
                 new_balance = old_balance + change
-                target_user.credits = new_balance
-                await convo.send_message(f"✅ Balance updated!\nUser: {target_user_id}\nOld Balance: {old_balance} credits\nChange: {change:+d} credits\nNew Balance: {new_balance} credits")
+                target_user.balance = new_balance
+                await convo.send_message(
+                    f"✅ Balance updated!\n"
+                    f"User: {target_user_id}\n"
+                    f"Old balance: ${old_balance:,.2f}\n"
+                    f"Change: ${change:+,.2f}\n"
+                    f"New balance: ${new_balance:,.2f} "
+                    f"({target_user.credits:.1f} credits)"
+                )
             else:
                 # Absolute value
                 new_balance = int(balance_input)
-                target_user.credits = new_balance
-                await convo.send_message(f"✅ Balance updated!\nUser: {target_user_id}\nNew Balance: {new_balance} credits")
+                target_user.balance = new_balance
+                await convo.send_message(
+                    f"✅ Balance updated!\n"
+                    f"User: {target_user_id}\n"
+                    f"New balance: ${new_balance:,.2f} "
+                    f"({target_user.credits:.1f} credits)"
+                )
         except ValueError:
-            await convo.send_message("❌ Invalid balance amount. Must be a number.")
+            await convo.send_message("❌ Invalid peso amount. Must be a whole number.")
             return
         
     except Exception as e:
@@ -368,7 +383,7 @@ async def show_main_menu(convo: Convo, user: User) -> str:
     credits = balance / CREDIT_VALUE
     
     msg = build_interactive(
-        header="Facility Control",
+        header=("Facility Control" if is_admin else "User Menu"),
         body=(
             f"*Hello, {user.name}!*\n"
             f"*Balance: ${balance:,.2f} • Credits: {credits:.1f}*\n"
