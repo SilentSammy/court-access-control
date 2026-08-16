@@ -4,7 +4,7 @@ import os
 import random
 from datetime import datetime, date, timedelta, time
 from string import Template
-from server.database import CREDIT_VALUE, connect, get_contact_id
+from server.database import CREDIT_VALUE, connect, credits_for_minutes, get_contact_id
 from server.session import Session, Timestamp
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
@@ -165,6 +165,7 @@ class GlobalSchedule:
 
         start = datetime.fromtimestamp(session.start)
         end = datetime.fromtimestamp(session.end)
+        credits = credits_for_minutes(session.span)
         conn = connect()
         cursor = conn.cursor()
         try:
@@ -178,8 +179,8 @@ class GlobalSchedule:
                     contact_id,
                     start,
                     end,
-                    CREDIT_VALUE * session.span,
-                    session.span,
+                    CREDIT_VALUE * credits,
+                    credits,
                     session.room,
                     'Court booking',
                 ),

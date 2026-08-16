@@ -1,5 +1,7 @@
+from decimal import Decimal
+
 from server.schedule import GlobalSchedule
-from server.database import connect
+from server.database import CREDIT_VALUE, add_balance, connect, get_contact_id
 
 
 class User:
@@ -12,11 +14,21 @@ class User:
     @property
     def credits(self):
         """Returns the user's credits."""
-        return UserManager.get_user(self.id)[1]
+        return self.balance / CREDIT_VALUE
+
+    @property
+    def balance(self):
+        """Return the user's monetary balance from database activities."""
+        return UserManager.get_user_balance(self.id)
+
+    @property
+    def name(self):
+        """Return the user's database name, falling back to their ID."""
+        return UserManager.get_user_name(self.id) or self.id
 
     @credits.setter
-    def credits(self, value: int):
-        """Credit updates are not supported by the current database schema."""
+    def credits(self, value):
+        """Set credits by recording the required balance adjustment."""
         UserManager.update_credits(self.id, value)
 
     @property
@@ -27,6 +39,48 @@ class User:
 
 
 class UserManager:
+    @classmethod
+    def get_user_name(cls, user_id: str):
+        """Return the contact name for a WhatsApp number, or None."""
+        conn = connect()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT nombre FROM contactos WHERE whatsapp = %s",
+                (str(user_id),),
+            )
+            row = cursor.fetchone()
+            return row[0] if row else None
+        finally:
+            cursor.close()
+            conn.close()
+
+    @classmethod
+    def get_user_balance(cls, user_id: str):
+        """Return the raw Pago-minus-Rent monetary balance for a user."""
+        conn = connect()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(CASE
+                           WHEN a.tipo = 'Pago' THEN a.valor
+                           WHEN a.tipo = 'Rent' THEN -a.valor
+                           ELSE 0
+                       END), 0) AS balance
+                FROM contactos AS c
+                LEFT JOIN actividades AS a ON a.contacto = c.id
+                WHERE c.whatsapp = %s
+                GROUP BY c.id
+                """,
+                (str(user_id),),
+            )
+            row = cursor.fetchone()
+            return row[0] if row else 0
+        finally:
+            cursor.close()
+            conn.close()
+
     @classmethod
     def get_users(cls):
         """Return ``(whatsapp, credits)`` tuples for all database users."""
@@ -46,7 +100,10 @@ class UserManager:
                 GROUP BY c.id, c.whatsapp
                 """
             )
-            return [(str(whatsapp), credits) for whatsapp, credits in cursor.fetchall()]
+            return [
+                (str(whatsapp), balance / CREDIT_VALUE)
+                for whatsapp, balance in cursor.fetchall()
+            ]
         finally:
             cursor.close()
             conn.close()
@@ -82,7 +139,10 @@ class UserManager:
                 (str(user_id),),
             )
             row = cursor.fetchone()
-            return (str(row[0]), row[1]) if row else (str(user_id), 0)
+            return (
+                (str(row[0]), row[1] / CREDIT_VALUE)
+                if row else (str(user_id), 0)
+            )
         finally:
             cursor.close()
             conn.close()
@@ -93,6 +153,21 @@ class UserManager:
         return cls.get_user(user_id)
 
     @classmethod
-    def update_credits(cls, user_id: str, credits: int):
-        """No-op until the database has an explicit balance-update workflow."""
-        return None
+    def update_credits(cls, user_id: str, credits):
+        """Set credits by adding the missing amount as a Pago activity."""
+        contact_id = get_contact_id(user_id)
+        if contact_id is None:
+            raise ValueError(f"No database contact found for WhatsApp number {user_id}")
+
+        current_balance = Decimal(str(cls.get_user_balance(user_id)))
+        target_balance = Decimal(str(credits)) * Decimal(CREDIT_VALUE)
+        missing_amount = target_balance - current_balance
+
+        if missing_amount == 0:
+            return None
+
+        return add_balance(
+            contact_id,
+            missing_amount,
+            description='Balance adjustment',
+        )

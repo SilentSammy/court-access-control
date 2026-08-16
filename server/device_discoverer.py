@@ -219,10 +219,8 @@ class DeviceDiscoverer:
     async def _discovery_loop(self):
         """Periodically scan network for new devices."""
         while self._running:
-            await asyncio.sleep(self.discovery_interval)
-            if not self._running:
-                break
             await self.discover_devices()
+            await asyncio.sleep(self.discovery_interval)
     
     def start_continuous_discovery(self):
         """Start background discovery and health check tasks."""

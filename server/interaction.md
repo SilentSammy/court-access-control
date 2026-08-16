@@ -21,42 +21,9 @@ If you identify one or multiple sessions that should be removed, you should desc
 
 CONTEXT:
 Available room types: "Squash Courts"
-Now: Saturday 2026/08/15 19:15
+Now: Saturday 2026/08/15 20:42
 Upcoming dates: Sunday 2026/08/16, Monday 2026/08/17, Tuesday 2026/08/18, Wednesday 2026/08/19, Thursday 2026/08/20, Friday 2026/08/21
-User sessions: [
-    {
-        "session_id": 0,
-        "room_id": 1,
-        "room_type": "Squash Courts",
-        "start_date": "2026-08-16",
-        "start_time": "12:00",
-        "duration": 90
-    },
-    {
-        "session_id": 1,
-        "room_id": 1,
-        "room_type": "Squash Courts",
-        "start_date": "2026-08-16",
-        "start_time": "15:00",
-        "duration": 60
-    },
-    {
-        "session_id": 2,
-        "room_id": 2,
-        "room_type": "Squash Courts",
-        "start_date": "2026-08-15",
-        "start_time": "20:35",
-        "duration": 3
-    },
-    {
-        "session_id": 3,
-        "room_id": 2,
-        "room_type": "Squash Courts",
-        "start_date": "2026-08-15",
-        "start_time": "20:41",
-        "duration": 3
-    }
-]
+User sessions: []
 
 
 EXAMPLE 1:
@@ -91,18 +58,17 @@ I will add a session with the same details, but with a start_time of 15:00.
 
 
 # Input
-Book right now for 3m
+Book a 30-minute sessions right now
 
 # Output (gpt-4o)
-To fulfill this request, I'll book a session right now for 3 minutes. The current date and time is Saturday, 2026-08-15 at 19:15. The facility type specified is implicitly "Squash Courts". 
+The user wants to book a 30-minute session immediately. Given that the current time is Saturday, 2026/08/15, at 20:42, I will add a session starting now at 20:42 for a duration of 30 minutes. The user did not specify a facility type, but assuming the intention is to use the "Squash Courts" (as it is the available room type).
 
-Here's the session to be added:
 ```json
 {
-    "action": "add",
-    "room_type": "Squash Courts",
-    "start_date": "2026-08-15",
-    "start_time": "19:15",
-    "duration": 3
+  "action": "add",
+  "room_type": "Squash Courts",
+  "start_date": "2026-08-15",
+  "start_time": "20:42",
+  "duration": 30
 }
 ```

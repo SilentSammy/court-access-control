@@ -9,7 +9,7 @@ from schedule_config import global_schedule, squash_schedule, schedules
 from server.schedule import ScheduleDisplayer
 from server.smart_scheduler import SmartScheduler
 from server.schedule_edit import ScheduleEdit
-from server.session_manager import SessionManager
+from server.database import CREDIT_VALUE
 from wapp.wapp_agent import build_media
 
 agent = WAppAgent(config_file=os.path.dirname(os.path.abspath(__file__))+'\\wapp.json')
@@ -17,13 +17,9 @@ manager = FacilityManager(discoverer=DeviceDiscoverer(
     discovery_interval=10,
     health_check_interval=5,
     check_localhost=True,
-    scan_networks=[
-        "192.168.137.0/24",  # Windows hotspot
-        "192.168.1.0/24"     # Home network
-    ],
+    scan_networks=None,  # Auto-detect the currently connected local network
     # exclude_ips=["192.168.1.226"]  # Exclude problematic IPs
 ))
-session_manager = SessionManager(check_interval=5, sessions_file="sessions.txt")
 ADMIN_USER_IDS = ['50766180742', '5218114142626']  # Hardcoded admin user IDs
 
 # --- ADMIN OPTIONS ---
@@ -189,16 +185,15 @@ async def show_schedule(convo: Convo, user: User):
 async def manage_sessions(convo: Convo, user: User):
     """Manage user sessions - book or cancel sessions."""
     try:
-        # Show the schedule first
-        await show_schedule(convo, user)
-        
         # Prompt for natural language input
-        await convo.send_message("💬 Tell me what you'd like to do (e.g., 'book Squash tomorrow at 3pm for 1h' or 'cancel my Saturday sessions'):")
+        await convo.send_message(
+            "💬 Tell me what you'd like to do.\n"
+            "For example: 'book Squash tomorrow at 3pm for 1h' or "
+            "'cancel my Saturday sessions'."
+        )
         response = await convo.wait_for_message()
         user_input = response.text.strip()
-        
-        await convo.send_message("⏳ Processing your request...")
-        
+
         # Parse natural language using SmartScheduler
         scheduler = SmartScheduler(user, schedules)
         raw_response = scheduler.process_user_message(user_input)
@@ -225,9 +220,6 @@ async def manage_sessions(convo: Convo, user: User):
             await convo.send_message("❌ No valid sessions after filtering (conflicts, affordability, etc.)")
             return
         
-        # Show single unified preview with all changes
-        await convo.send_message(f"📊 Preview: {len(edit.sessions_to_add)} to add, {len(edit.sessions_to_cancel)} to cancel")
-        
         # Determine which schedules are affected
         affected_room_ids = set()
         for session in edit.all_sessions:
@@ -253,21 +245,23 @@ async def manage_sessions(convo: Convo, user: User):
         # Upload and send the unified preview
         media_id = await convo.agent.upload_media(preview_path)
         await convo.send_message(build_media(media_id))
-        
-        # Show cost summary
-        cost_msg = (
-            f"💰 *Cost Summary:*\n"
+
+        # Combine the change summary, cost summary, and confirmation prompt
+        current_balance = user.credits
+        summary = (
+            f"📊 *Booking Preview*\n"
+            f"  • Add: {len(edit.sessions_to_add)} session(s)\n"
+            f"  • Cancel: {len(edit.sessions_to_cancel)} session(s)\n\n"
+            f"💰 *Cost Summary*\n"
             f"  • To add: {edit.cost_to_add} credits\n"
             f"  • Refund: {edit.cancellation_refund} credits\n"
             f"  • Net cost: {edit.net_cost} credits\n"
-            f"  • Current balance: {user.credits} credits\n"
-            f"  • New balance: {user.credits - edit.net_cost} credits"
+            f"  • Current balance: {current_balance} credits\n"
+            f"  • New balance: {current_balance - edit.net_cost} credits\n\n"
+            f"Confirm these changes?"
         )
-        await convo.send_message(cost_msg)
-        
-        # Prompt for confirmation
         confirm_msg = build_interactive(
-            body="Confirm these changes?",
+            body=summary,
             interactive=create_interactive_buttons(["✅ Confirm", "❌ Cancel"])
         )
         confirmation = await convo.prompt(confirm_msg)
@@ -276,13 +270,7 @@ async def manage_sessions(convo: Convo, user: User):
             # Apply changes
             cancelled = edit.cancel_sessions()
             booked = edit.book_sessions()
-            
-            # Sync with hardware control queue
-            for sess in booked:
-                session_manager.add_session(sess)
-            for sess in cancelled:
-                session_manager.remove_session(sess)
-            
+
             result_msg = (
                 f"✅ *Changes applied!*\n"
                 f"  • Booked: {len(booked)} session(s)\n"
@@ -290,9 +278,6 @@ async def manage_sessions(convo: Convo, user: User):
                 f"  • New balance: {user.credits} credits"
             )
             await convo.send_message(result_msg)
-            
-            # Show updated schedule
-            await show_schedule(convo, user)
         else:
             await convo.send_message("❌ Changes cancelled. No modifications were made.")
         
@@ -379,11 +364,14 @@ async def show_main_menu(convo: Convo, user: User) -> str:
     user_sessions = user.sessions
     ongoing = sum(1 for s in user_sessions if s.has_started() and not s.has_ended())
     upcoming = sum(1 for s in user_sessions if not s.has_started())
+    balance = user.balance
+    credits = balance / CREDIT_VALUE
     
     msg = build_interactive(
         header="Facility Control",
         body=(
-            f"*Balance: {user.credits} credits*\n"
+            f"*Hello, {user.name}!*\n"
+            f"*Balance: ${balance:,.2f} • Credits: {credits:.1f}*\n"
             f"*Sessions: {ongoing} ongoing • {upcoming} upcoming*\n\n"
             f"What would you like to do?"
         ),
@@ -411,48 +399,10 @@ async def handle_conversation(convo: Convo):
         print(f"Error in conversation: {e}")
 
 async def main():
-    """Main entry point - start discovery, session manager, and agent."""
+    """Start device discovery and the WhatsApp agent."""
     print("Starting facility manager with device discovery...")
     manager.start_discovery()
-    
-    # Get the event loop for session callbacks
-    loop = asyncio.get_running_loop()
-    
-    # Set up session manager callbacks to control lights
-    def on_session_start(session):
-        print(f"[SessionManager] Starting session for room {session.room}")
-        
-        # Turn on lights (schedule coroutine from thread)
-        future = asyncio.run_coroutine_threadsafe(
-            manager.control_lights(str(session.room), 1),
-            loop
-        )
-        try:
-            result = future.result(timeout=5)
-            print(f"[SessionManager] Lights ON for room {session.room}: {result}")
-        except Exception as e:
-            print(f"[SessionManager] Error turning lights ON: {e}")
-    
-    def on_session_end(session):
-        print(f"[SessionManager] Ending session for room {session.room}")
-        
-        # Turn off lights (schedule coroutine from thread)
-        future = asyncio.run_coroutine_threadsafe(
-            manager.control_lights(str(session.room), 0),
-            loop
-        )
-        try:
-            result = future.result(timeout=5)
-            print(f"[SessionManager] Lights OFF for room {session.room}: {result}")
-        except Exception as e:
-            print(f"[SessionManager] Error turning lights OFF: {e}")
-    
-    session_manager.start_session = on_session_start
-    session_manager.end_session = on_session_end
-    
-    print("Starting session manager...")
-    session_manager.start()
-    
+
     print("Starting WhatsApp agent...")
     await agent.start(handle_conversation)
 

@@ -1,9 +1,7 @@
 from server.session import Session, Timestamp
 from server.schedule import GlobalSchedule, RoomSchedule, ScheduleItem
 from server.user import User
-from server.database import CREDIT_VALUE
-
-COST_PER_MINUTE = CREDIT_VALUE  # credits charged per minute of session time
+from server.database import credits_for_minutes
 
 
 class ScheduleEdit:
@@ -31,7 +29,7 @@ class ScheduleEdit:
 
     @staticmethod
     def get_session_cost(session: Session) -> int:
-        return session.span * COST_PER_MINUTE
+        return credits_for_minutes(session.span)
 
     @property
     def cost_to_add(self) -> int:
@@ -127,7 +125,6 @@ class ScheduleEdit:
                 continue
             room_schedule = RoomSchedule(self.global_schedule, room_ids=s.room)
             if room_schedule.add_session(s, self.user.id):
-                self.user.credits -= cost
                 booked.append(s)
         return booked
 
@@ -139,7 +136,6 @@ class ScheduleEdit:
         cancelled = []
         for s in self.sessions_to_cancel:
             if self.global_schedule.delete_session(s):
-                self.user.credits += self.get_session_cost(s)
                 cancelled.append(s)
         return cancelled
 
