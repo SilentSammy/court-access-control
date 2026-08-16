@@ -1,8 +1,9 @@
 from server.session import Session, Timestamp
 from server.schedule import GlobalSchedule, RoomSchedule, ScheduleItem
 from server.user import User
+from server.database import CREDIT_VALUE
 
-COST_PER_MINUTE = 1  # credits charged per minute of session time
+COST_PER_MINUTE = CREDIT_VALUE  # credits charged per minute of session time
 
 
 class ScheduleEdit:

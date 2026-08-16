@@ -21,9 +21,42 @@ If you identify one or multiple sessions that should be removed, you should desc
 
 CONTEXT:
 Available room types: "Squash Courts"
-Now: Saturday 2026/08/15 18:24
+Now: Saturday 2026/08/15 19:15
 Upcoming dates: Sunday 2026/08/16, Monday 2026/08/17, Tuesday 2026/08/18, Wednesday 2026/08/19, Thursday 2026/08/20, Friday 2026/08/21
-User sessions: []
+User sessions: [
+    {
+        "session_id": 0,
+        "room_id": 1,
+        "room_type": "Squash Courts",
+        "start_date": "2026-08-16",
+        "start_time": "12:00",
+        "duration": 90
+    },
+    {
+        "session_id": 1,
+        "room_id": 1,
+        "room_type": "Squash Courts",
+        "start_date": "2026-08-16",
+        "start_time": "15:00",
+        "duration": 60
+    },
+    {
+        "session_id": 2,
+        "room_id": 2,
+        "room_type": "Squash Courts",
+        "start_date": "2026-08-15",
+        "start_time": "20:35",
+        "duration": 3
+    },
+    {
+        "session_id": 3,
+        "room_id": 2,
+        "room_type": "Squash Courts",
+        "start_date": "2026-08-15",
+        "start_time": "20:41",
+        "duration": 3
+    }
+]
 
 
 EXAMPLE 1:
@@ -58,11 +91,18 @@ I will add a session with the same details, but with a start_time of 15:00.
 
 
 # Input
-Book tomorrow at 8:30 1h
+Book right now for 3m
 
 # Output (gpt-4o)
-The user wants to book a session for tomorrow, which is Sunday, 2026/08/16, at 8:30 AM for 1 hour. Since the user wants to book for Squash, I will set the room_type to "Squash Courts".
+To fulfill this request, I'll book a session right now for 3 minutes. The current date and time is Saturday, 2026-08-15 at 19:15. The facility type specified is implicitly "Squash Courts". 
 
+Here's the session to be added:
 ```json
-{"action": "add", "room_type": "Squash Courts", "start_date": "2026-08-16", "start_time": "08:30", "duration": 60}
+{
+    "action": "add",
+    "room_type": "Squash Courts",
+    "start_date": "2026-08-15",
+    "start_time": "19:15",
+    "duration": 3
+}
 ```

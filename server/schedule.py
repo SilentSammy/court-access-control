@@ -1,10 +1,10 @@
 import sys
-import csv
 import math
 import os
 import random
 from datetime import datetime, date, timedelta, time
 from string import Template
+from server.database import CREDIT_VALUE, connect, get_contact_id
 from server.session import Session, Timestamp
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
@@ -107,91 +107,132 @@ class GlobalSchedule:
     """Class to manage the global schedule across all rooms."""
 
     def __init__(self, file_path="schedule.csv"):
-        self.last_update = 0
-        self._sessions = set()
+        # Kept for compatibility with existing callers; persistence is MySQL-backed.
         self.file_path = file_path
 
     def get_schedule(self):
-        """Return sorted sessions, re-reading from disk when the file changes."""
-        if not os.path.exists(self.file_path):
-            # Create the directory if it doesn't exist (only if there's a directory in the path)
-            dir_path = os.path.dirname(self.file_path)
-            if dir_path:  # Only create directory if path contains a directory
-                os.makedirs(dir_path, exist_ok=True)
-            return []
-        if os.path.getmtime(self.file_path) > self.last_update:
-            self.last_update = os.path.getmtime(self.file_path)
-            self._refresh_sessions()
-        return sorted(self._sessions, key=lambda s: s.start)
+        """Return active and future Rent activities as ScheduleItems."""
+        return sorted(self._refresh_sessions(), key=lambda item: item.start)
 
     def _refresh_sessions(self):
-        """Read sessions from the CSV file, discarding any that have ended."""
-        self._sessions.clear()
-        overwrite = False
-
-        if not os.path.exists(self.file_path):
-            return
-
-        with open(self.file_path, 'r', newline='') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if not row:
-                    continue
-                full_code = int(row[0])
-                user = row[1] if len(row) > 1 else ''
-                sess = Session.from_code(full_code)
-                if sess.has_ended():
-                    overwrite = True
-                    continue
+        """Read sessions from Rent activities that have not ended."""
+        conn = connect()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                SELECT a.fecha, a.`final`, a.duracion, a.cancha,
+                       c.whatsapp
+                FROM actividades AS a
+                JOIN contactos AS c ON c.id = a.contacto
+                WHERE a.tipo = 'Rent' AND a.`final` > NOW()
+                ORDER BY a.fecha
+                """
+            )
+            sessions = []
+            for row in cursor.fetchall():
                 try:
-                    self._sessions.add(ScheduleItem.from_session(sess, user))
-                except (OSError, ValueError, OverflowError):
-                    overwrite = True  # drop corrupted session
+                    start = row['fecha']
+                    end = row['final']
+                    if not isinstance(start, datetime):
+                        start = datetime.fromisoformat(str(start))
+                    if not isinstance(end, datetime):
+                        end = datetime.fromisoformat(str(end))
+
+                    duration = int((end - start).total_seconds() / 60)
+                    if duration <= 0:
+                        duration = int(row['duracion'] or 0)
+                    if duration <= 0:
+                        continue
+
+                    session = Session(start.timestamp(), duration, int(row['cancha']))
+                    sessions.append(
+                        ScheduleItem.from_session(session, str(row['whatsapp']))
+                    )
+                except (KeyError, TypeError, ValueError, OSError, OverflowError):
                     continue
-
-        if overwrite:
-            self._overwrite_sessions()
-
-    def _overwrite_sessions(self):
-        """Rewrite the CSV from the in-memory set."""
-        with open(self.file_path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            for item in self._sessions:
-                writer.writerow([item.session.full_code, item.user])
-        self.last_update = os.path.getmtime(self.file_path)
+            return sessions
+        finally:
+            cursor.close()
+            conn.close()
 
     def add_session(self, session: Session, user: str):
-        """Adds a session to the global schedule. Returns the ScheduleItem."""
-
+        """Insert a Rent activity and return its ScheduleItem."""
         item = ScheduleItem.from_session(session, user)
-        self._sessions.add(item)
+        contact_id = get_contact_id(user)
+        if contact_id is None:
+            raise ValueError(f"No database contact found for WhatsApp number {user}")
 
-        # Ensure the directory exists (only if there's a directory in the path)
-        dir_path = os.path.dirname(self.file_path)
-        if dir_path:
-            os.makedirs(dir_path, exist_ok=True)
-        with open(self.file_path, 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow([session.full_code, user])
-
-        self.last_update = os.path.getmtime(self.file_path)
+        start = datetime.fromtimestamp(session.start)
+        end = datetime.fromtimestamp(session.end)
+        conn = connect()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                INSERT INTO actividades
+                    (contacto, fecha, `final`, tipo, valor, duracion, cancha, descripcion)
+                VALUES (%s, %s, %s, 'Rent', %s, %s, %s, %s)
+                """,
+                (
+                    contact_id,
+                    start,
+                    end,
+                    CREDIT_VALUE * session.span,
+                    session.span,
+                    session.room,
+                    'Court booking',
+                ),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
 
         return item
 
     def delete_session(self, session: Session) -> bool:
-        """Remove a session from storage. Returns True if deleted."""
+        """Delete the matching Rent activity. Returns True if deleted."""
         item = next(
             (s for s in self.get_schedule() if s.session.full_code == session.full_code),
             None
         )
         if item is None:
             return False
-        try:
-            self._sessions.discard(item)
-            self._overwrite_sessions()
-            return True
-        except Exception:
+
+        contact_id = get_contact_id(item.user)
+        if contact_id is None:
             return False
+
+        start = datetime.fromtimestamp(session.start)
+        end = datetime.fromtimestamp(session.end)
+        conn = connect()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                DELETE FROM actividades
+                WHERE contacto = %s
+                  AND tipo = 'Rent'
+                  AND fecha = %s
+                  AND `final` = %s
+                  AND cancha = %s
+                LIMIT 1
+                """,
+                (contact_id, start, end, session.room),
+            )
+            deleted = cursor.rowcount > 0
+            conn.commit()
+            return deleted
+        except Exception:
+            conn.rollback()
+            return False
+        finally:
+            cursor.close()
+            conn.close()
 
     def get_user_schedule(self, user: str):
         """Return ScheduleItems belonging to the given user."""
